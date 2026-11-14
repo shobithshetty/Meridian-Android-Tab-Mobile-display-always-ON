@@ -19,4 +19,6 @@ debug.keystore
 *.zip
 test_output.txt
 *.log
+*.apk
+*.aab
 

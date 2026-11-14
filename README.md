@@ -1,22 +1,49 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+
+# ⏱️ Meridian — Android Tab & Mobile Display Always-ON
+
+**An adaptive, full-screen digital wallpaper clock with ADHD-friendly periodic chime reminders and world clock displays.**
+
+[![Release](https://img.shields.io/github/v/release/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON?color=blue&label=Latest%20Release)](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest)
+[![Download APK](https://img.shields.io/badge/Download-APK%20(v1.0)-success?style=for-the-badge&logo=android)](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest/download/Meridian-v1.0.apk)
+
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 📱 Download & Install
 
-View your app in AI Studio: https://ai.studio/apps/a5b4dabd-57b9-48e6-9225-c08b58839b17
+### For Android Users:
+1. Tap the button above or download [`Meridian-v1.0.apk`](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest/download/Meridian-v1.0.apk) directly from the [Releases page](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest).
+2. Open the downloaded file on your Android tablet or phone.
+3. If prompted, allow **"Install unknown apps"** from your browser/files app.
+4. Tap **Install** and open Meridian!
 
-## Run Locally
+---
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+## ✨ Features
 
+- **🕒 Full-Screen Always-On Display:** Designed for desks, nightstands, and wall-mounted tablets to keep the time visible without screen timeout.
+- **🔔 ADHD-Friendly Periodic Chimes:** Gentle, customizable auditory cues (synthesized audio tones) to maintain time awareness and reduce time-blindness.
+- **🌍 World Clock & Overlap Planner:** Track multiple timezones simultaneously with city cards and interactive overlap planning.
+- **🫁 Paced Breathing Bubble:** Integrated visual breathing guide for mindfulness and stress reduction.
+- **🎨 Theme Studio:** Custom color themes, typography (Outfit, Plus Jakarta Sans, JetBrains Mono), and AMOLED-optimized dark modes.
+- **📲 Home Screen & Lock Screen Widgets:** Quick-glance world clock widgets.
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
-7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+---
+
+## 🛠️ Building From Source
+
+**Prerequisites:** Android Studio & JDK 17+
+
+```bash
+# Clone the repository
+git clone https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON.git
+
+# Navigate to project directory
+cd Meridian-Android-Tab-Mobile-display-always-ON
+
+# Build the release APK
+./gradlew assembleRelease
+```
+The compiled APK will be generated at `app/build/outputs/apk/release/app-release.apk`.
