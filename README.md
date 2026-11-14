@@ -7,6 +7,27 @@
 [![Release](https://img.shields.io/github/v/release/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON?color=blue&label=Latest%20Release)](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest)
 [![Download APK](https://img.shields.io/badge/Download-APK%20(v1.0)-success?style=for-the-badge&logo=android)](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest/download/Meridian-v1.0.apk)
 
+<br/><br/>
+
+<img src="screenshots/meridian_clock_dashboard.jpg" alt="Meridian Full-Screen Always-On Clock Dashboard" width="850" />
+
+</div>
+
+---
+
+## 📸 App Screenshots
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><b>🌍 World Clock & Overlap Planner</b></td>
+    <td align="center"><b>🔔 ADHD Chime & Focus Studio</b></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/meridian_world_clock.jpg" alt="World Clock and Overlap Planner" width="420" /></td>
+    <td><img src="screenshots/meridian_adhd_chimes.jpg" alt="ADHD Chime & Focus Studio" width="420" /></td>
+  </tr>
+</table>
 </div>
 
 ---
@@ -14,7 +35,7 @@
 ## 📱 Download & Install
 
 ### For Android Users:
-1. Tap the button above or download [`Meridian-v1.0.apk`](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest/download/Meridian-v1.0.apk) directly from the [Releases page](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest).
+1. Tap the green badge above or download [`Meridian-v1.0.apk`](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest/download/Meridian-v1.0.apk) directly from the [Releases page](https://github.com/shobithshetty/Meridian-Android-Tab-Mobile-display-always-ON/releases/latest).
 2. Open the downloaded file on your Android tablet or phone.
 3. If prompted, allow **"Install unknown apps"** from your browser/files app.
 4. Tap **Install** and open Meridian!

@@ -21,4 +21,6 @@ test_output.txt
 *.log
 *.apk
 *.aab
+.aistudio/
+metadata.json
 

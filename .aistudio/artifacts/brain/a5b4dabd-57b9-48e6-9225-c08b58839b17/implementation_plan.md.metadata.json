@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan to fix the non-responsive Open Battery Settings button using zero-permission Android system intents and automatic status refresh on resume while keeping the Battery Saver dialog open.",
-  "updatedAt":  "2026-11-14T00:29:52.873248785Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
