@@ -22,7 +22,7 @@ data class ClockSettings(
     val quietHoursDaysOfWeek: String = "ALL", // "ALL" or comma-separated day integers 1..7 (1=Monday, 7=Sunday)
     val showSeconds: Boolean = true,
     val digital24HourFormat: Boolean = false,
-    val themeName: String = "Midnight Cosmos", // 7 presets + "Custom"
+    val themeName: String = "Aurora", // 8 presets + "Custom"
     val customBgColorArgb: Long = 0xFF070B14L,
     val customTextColorArgb: Long = 0xFFE2E8F0L,
     val customNumberColorArgb: Long = 0xFF38BDF8L,
@@ -38,5 +38,10 @@ data class ClockSettings(
     val currentFocusText: String = "Stay in the flow, one thing at a time.",
     val showBreathingGuide: Boolean = false,
     val currentAffirmationIndex: Int = 0,
-    val clockSortOrder: String = "DEFAULT" // "DEFAULT", "NAME", "OFFSET"
+    val clockSortOrder: String = "DEFAULT", // "DEFAULT", "NAME", "OFFSET"
+    val eyeBreakEnabled: Boolean = false,
+    val eyeBreakIntervalMinutes: Int = 20, // Configurable 1..180 minute eye break reminder (e.g. 20m, 50m)
+    val layoutStyle: String = "BOLD", // "BOLD", "CALM", "DASHBOARD", "CLASSIC" - independent of colour theme
+    val backdropPattern: String = "NONE", // "NONE" or "CAMO" - faint pattern over any theme/layout
+    val nightDimMode: String = "AUTO" // "OFF", "AUTO" (dims 10pm-6am), "BEDSIDE" (always very dark)
 )

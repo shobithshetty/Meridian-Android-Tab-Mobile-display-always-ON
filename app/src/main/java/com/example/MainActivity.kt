@@ -96,6 +96,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val friendClocks by viewModel.friendClocks.collectAsStateWithLifecycle()
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
+    val activeEyeBreakPrompt by viewModel.activeEyeBreakPrompt.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -186,11 +187,13 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
         isBackupImportDialogShowing ||
         isClockSyncDialogShowing ||
         isBreathingDialogShowing ||
+        activeEyeBreakPrompt != null ||
         pendingCrashLog != null
 
     BackHandler(enabled = anyOverlayOpen) {
         when {
             pendingCrashLog != null -> pendingCrashLog = null
+            activeEyeBreakPrompt != null -> viewModel.dismissEyeBreakPrompt()
             isBreathingDialogShowing -> isBreathingDialogShowing = false
             isClockSyncDialogShowing -> isClockSyncDialogShowing = false
             isSettingsHubShowing -> {
@@ -220,9 +223,64 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
         ) {
             val posture = classifyScreenPosture(maxWidth = maxWidth, maxHeight = maxHeight)
 
-            when (posture) {
+            // Every posture (phone/tablet, portrait/landscape) uses the chosen style; only CLASSIC keeps the legacy layouts.
+            val usesStyledLayout = settings.layoutStyle != LayoutStyle.CLASSIC
+
+            if (usesStyledLayout) {
+                when {
+                    isWatchFace(settings.layoutStyle) -> WatchFaceLayout(
+                        style = settings.layoutStyle,
+                        currentLocalTime = currentLocalTime,
+                        settings = settings,
+                        friendClocks = friendClocks,
+                        activeTheme = activeTheme,
+                        viewModel = viewModel,
+                        onAddFriendClicked = { isAddingFriendDialogShowing = true },
+                        onOpenCustomThemeStudio = { isCustomThemeStudioShowing = true },
+                        onOpenSettings = { isSettingsHubShowing = true },
+                        onOpenSyncInspector = { isClockSyncDialogShowing = true },
+                        onOpenBreathing = { isBreathingDialogShowing = true }
+                    )
+                    settings.layoutStyle == LayoutStyle.CALM -> CalmClockLayout(
+                        currentLocalTime = currentLocalTime,
+                        settings = settings,
+                        friendClocks = friendClocks,
+                        activeTheme = activeTheme,
+                        viewModel = viewModel,
+                        onAddFriendClicked = { isAddingFriendDialogShowing = true },
+                        onOpenCustomThemeStudio = { isCustomThemeStudioShowing = true },
+                        onOpenSettings = { isSettingsHubShowing = true },
+                        onOpenSyncInspector = { isClockSyncDialogShowing = true },
+                        onOpenBreathing = { isBreathingDialogShowing = true }
+                    )
+                    settings.layoutStyle == LayoutStyle.DASHBOARD -> DashboardClockLayout(
+                        currentLocalTime = currentLocalTime,
+                        settings = settings,
+                        friendClocks = friendClocks,
+                        activeTheme = activeTheme,
+                        viewModel = viewModel,
+                        onAddFriendClicked = { isAddingFriendDialogShowing = true },
+                        onOpenCustomThemeStudio = { isCustomThemeStudioShowing = true },
+                        onOpenSettings = { isSettingsHubShowing = true },
+                        onOpenSyncInspector = { isClockSyncDialogShowing = true },
+                        onOpenBreathing = { isBreathingDialogShowing = true }
+                    )
+                    else -> BoldClockLayout(
+                        currentLocalTime = currentLocalTime,
+                        settings = settings,
+                        friendClocks = friendClocks,
+                        activeTheme = activeTheme,
+                        viewModel = viewModel,
+                        onAddFriendClicked = { isAddingFriendDialogShowing = true },
+                        onOpenCustomThemeStudio = { isCustomThemeStudioShowing = true },
+                        onOpenSettings = { isSettingsHubShowing = true },
+                        onOpenSyncInspector = { isClockSyncDialogShowing = true },
+                        onOpenBreathing = { isBreathingDialogShowing = true }
+                    )
+                }
+            } else Box(Modifier.fillMaxSize().lsBurnInDrift(currentLocalTime.minute)) { when (posture) {
                 AdaptiveScreenPosture.COMPACT -> CompactPhoneDashboard(
-                    containerWidth = maxWidth,
+                    containerWidth = this@BoxWithConstraints.maxWidth,
                     currentLocalTime = currentLocalTime,
                     settings = settings,
                     friendClocks = friendClocks,
@@ -242,7 +300,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 )
 
                 AdaptiveScreenPosture.SHORT_LANDSCAPE -> MobileLandscapeDockDashboard(
-                    containerWidth = maxWidth,
+                    containerWidth = this@BoxWithConstraints.maxWidth,
                     currentLocalTime = currentLocalTime,
                     settings = settings,
                     friendClocks = friendClocks,
@@ -262,8 +320,8 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 )
 
                 AdaptiveScreenPosture.MEDIUM -> MediumTabletDashboard(
-                    containerWidth = maxWidth,
-                    containerHeight = maxHeight,
+                    containerWidth = this@BoxWithConstraints.maxWidth,
+                    containerHeight = this@BoxWithConstraints.maxHeight,
                     currentLocalTime = currentLocalTime,
                     settings = settings,
                     friendClocks = friendClocks,
@@ -278,8 +336,8 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 )
 
                 AdaptiveScreenPosture.EXPANDED -> ExpandedWidescreenDashboard(
-                    containerWidth = maxWidth,
-                    containerHeight = maxHeight,
+                    containerWidth = this@BoxWithConstraints.maxWidth,
+                    containerHeight = this@BoxWithConstraints.maxHeight,
                     currentLocalTime = currentLocalTime,
                     settings = settings,
                     friendClocks = friendClocks,
@@ -291,6 +349,19 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                     onOpenSettings = { isSettingsHubShowing = true },
                     onOpenSyncInspector = { isClockSyncDialogShowing = true },
                     onOpenBreathing = { isBreathingDialogShowing = true }
+                )
+            } }
+
+            // Optional camo backdrop over any theme/layout (low opacity, taps pass through).
+            if (settings.backdropPattern == Backdrop.CAMO) CamoOverlay(activeTheme)
+
+            // Night dimming: a black scrim over the clock (not over dialogs). It has no pointer handling, so taps pass through.
+            val dimAlpha = NightDim.scrimAlpha(settings.nightDimMode, currentLocalTime.hour)
+            if (dimAlpha > 0f) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = dimAlpha))
                 )
             }
 
@@ -440,6 +511,19 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                         activeTheme = activeTheme,
                         viewModel = viewModel,
                         onDismiss = { isBreathingDialogShowing = false }
+                    )
+                }
+            }
+
+            activeEyeBreakPrompt?.let { eyePrompt ->
+                ModalScrimBox(onDismiss = { viewModel.dismissEyeBreakPrompt() }) {
+                    com.example.ui.dialogs.EyeBreakReminderDialog(
+                        promptState = eyePrompt,
+                        intervalMinutes = settings.eyeBreakIntervalMinutes,
+                        activeTheme = activeTheme,
+                        onAnotherExercise = { viewModel.nextEyeBreakExercise() },
+                        onSnooze = { viewModel.dismissEyeBreakPrompt(snoozeMinutes = 5) },
+                        onDismiss = { viewModel.dismissEyeBreakPrompt() }
                     )
                 }
             }

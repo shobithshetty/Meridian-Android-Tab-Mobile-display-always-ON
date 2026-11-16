@@ -37,6 +37,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.data.FriendClock
 import com.example.ui.ClockViewModel
+import com.example.ui.EyeBreakPromptState
+import com.example.ui.components.HdPrecisionCountdownRing
 import com.example.ui.components.hdBorderStroke
 import com.example.ui.theme.ChronometerDisplayFont
 import com.example.ui.theme.ChronometerMonoFont
@@ -2495,5 +2497,262 @@ fun BreathingGuideDialog(
         }
     }
 }
+
+@Composable
+fun EyeBreakReminderDialog(
+    promptState: EyeBreakPromptState,
+    intervalMinutes: Int,
+    activeTheme: ClockVisualTheme,
+    onAnotherExercise: () -> Unit,
+    onSnooze: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val exercise = promptState.exercise
+    var remainingBreakSeconds by remember(exercise.id, promptState.triggeredAtMillis) {
+        mutableIntStateOf(exercise.durationSeconds)
+    }
+
+    LaunchedEffect(exercise.id, promptState.triggeredAtMillis) {
+        remainingBreakSeconds = exercise.durationSeconds
+        while (remainingBreakSeconds > 0) {
+            kotlinx.coroutines.delay(1000L)
+            remainingBreakSeconds = (remainingBreakSeconds - 1).coerceAtLeast(0)
+        }
+    }
+
+    val progress = if (exercise.durationSeconds > 0) {
+        ((exercise.durationSeconds - remainingBreakSeconds).toFloat() / exercise.durationSeconds.toFloat())
+            .coerceIn(0f, 1f)
+    } else {
+        1f
+    }
+    val breakCompleted = remainingBreakSeconds == 0
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = activeTheme.bgEnd),
+        shape = RoundedCornerShape(22.dp),
+        border = hdBorderStroke(
+            accentColor = activeTheme.accentColor,
+            dividerColor = activeTheme.dividerColor,
+            width = 1.5.dp,
+            highlighted = true
+        ),
+        modifier = Modifier
+            .widthIn(max = 430.dp)
+            .fillMaxWidth(0.92f)
+            .padding(12.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .testTag("eye_break_reminder_dialog")
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(18.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        color = activeTheme.cardBackground,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, activeTheme.circadianCueColor)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Eye Care Reminder",
+                            tint = activeTheme.circadianCueColor,
+                            modifier = Modifier.padding(8.dp).size(22.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(R.string.eye_break_popup_badge),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp,
+                            color = activeTheme.circadianCueColor
+                        )
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(R.string.eye_break_popup_heading),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = activeTheme.textPrimary
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("close_eye_break_dialog_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss Eye Break Reminder",
+                        tint = activeTheme.textPrimary
+                    )
+                }
+            }
+
+            HorizontalDivider(color = activeTheme.dividerColor)
+
+            // Guided Exercise Timer Ring + Title
+            Surface(
+                color = activeTheme.cardBackground,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, activeTheme.dividerColor),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(58.dp)
+                        ) {
+                            HdPrecisionCountdownRing(
+                                progress = progress,
+                                trackColor = activeTheme.dividerColor,
+                                indicatorColor = if (breakCompleted) Color(0xFF81C784) else activeTheme.circadianCueColor,
+                                strokeWidth = 4.5.dp
+                            )
+                            Text(
+                                text = if (breakCompleted) "OK" else "${remainingBreakSeconds}s",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = ChronometerMonoFont,
+                                style = TextStyle(fontFeatureSettings = "tnum"),
+                                color = if (breakCompleted) Color(0xFF81C784) else activeTheme.numberColor
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = exercise.title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = activeTheme.textPrimary
+                            )
+                            Text(
+                                text = if (breakCompleted) {
+                                    "Break complete! Your eyes are refreshed."
+                                } else {
+                                    "${exercise.benefit} • ${remainingBreakSeconds}s left"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = if (breakCompleted) FontWeight.Bold else FontWeight.Medium,
+                                color = if (breakCompleted) Color(0xFF81C784) else activeTheme.textSecondary
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = exercise.instruction,
+                        fontSize = 12.sp,
+                        color = activeTheme.textPrimary,
+                        lineHeight = 18.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Every ${intervalMinutes}m schedule",
+                            fontSize = 10.sp,
+                            fontFamily = ChronometerMonoFont,
+                            color = activeTheme.textSecondary
+                        )
+
+                        TextButton(
+                            onClick = onAnotherExercise,
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 40.dp)
+                                .testTag("eye_break_next_exercise_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = activeTheme.accentColor,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(R.string.eye_break_popup_next),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = activeTheme.accentColor
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onSnooze,
+                    border = BorderStroke(1.dp, activeTheme.dividerColor),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = activeTheme.cardBackground,
+                        contentColor = activeTheme.textPrimary
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("eye_break_snooze_button")
+                ) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.eye_break_popup_snooze),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = activeTheme.accentColor,
+                        contentColor = activeTheme.onAccentColor
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("eye_break_done_button")
+                ) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.eye_break_popup_done),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+    }
+}
+
 
 

@@ -23,6 +23,12 @@ import org.json.JSONObject
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
+data class EyeBreakPromptState(
+    val exercise: TimeAndAlertUtils.EyeExercise,
+    val exerciseIndex: Int,
+    val triggeredAtMillis: Long
+)
+
 class ClockViewModel(
     private val repository: ClockRepository,
     context: Context
@@ -86,6 +92,24 @@ class ClockViewModel(
         )
     )
     val remainingChimeSeconds: StateFlow<Int> = _remainingChimeSeconds.asStateFlow()
+
+    private var nextEyeBreakEpochMillis: Long = TimeAndAlertUtils.computeNextEyeBreakEpochMillis(
+        System.currentTimeMillis(),
+        20
+    )
+
+    private val _remainingEyeBreakSeconds = MutableStateFlow(
+        TimeAndAlertUtils.computeRemainingChimeSeconds(
+            System.currentTimeMillis(),
+            nextEyeBreakEpochMillis
+        )
+    )
+    val remainingEyeBreakSeconds: StateFlow<Int> = _remainingEyeBreakSeconds.asStateFlow()
+
+    private val _activeEyeBreakPrompt = MutableStateFlow<EyeBreakPromptState?>(null)
+    val activeEyeBreakPrompt: StateFlow<EyeBreakPromptState?> = _activeEyeBreakPrompt.asStateFlow()
+
+    private var eyeExerciseCursor = 0
 
     private var tickJob: Job? = null
     private val lastFiredAlarms = mutableMapOf<Int, Long>()
@@ -156,6 +180,7 @@ class ClockViewModel(
             repository.checkAndPrepopulate()
             val initialSettings = repository.getSettingsDirect()
             recalculateNextChimeSchedule(initialSettings)
+            recalculateNextEyeBreakSchedule(initialSettings)
         }
 
         // Observe interval / alignment / chimeEnabled changes to keep countdown ring immediately synced
@@ -165,6 +190,16 @@ class ClockViewModel(
                 .distinctUntilChanged()
                 .collect {
                     recalculateNextChimeSchedule(settings.value)
+                }
+        }
+
+        // Observe eye break toggle & interval changes
+        viewModelScope.launch {
+            settings
+                .map { it.eyeBreakEnabled to it.eyeBreakIntervalMinutes }
+                .distinctUntilChanged()
+                .collect {
+                    recalculateNextEyeBreakSchedule(settings.value)
                 }
         }
 
@@ -214,6 +249,18 @@ class ClockViewModel(
         )
     }
 
+    private fun recalculateNextEyeBreakSchedule(activeSettings: ClockSettings) {
+        val nowMillis = System.currentTimeMillis()
+        nextEyeBreakEpochMillis = TimeAndAlertUtils.computeNextEyeBreakEpochMillis(
+            nowMillis = nowMillis,
+            intervalMinutes = activeSettings.eyeBreakIntervalMinutes
+        )
+        _remainingEyeBreakSeconds.value = TimeAndAlertUtils.computeRemainingChimeSeconds(
+            nowMillis,
+            nextEyeBreakEpochMillis
+        )
+    }
+
     private fun startClockTicker() {
         tickJob?.cancel()
         tickJob = viewModelScope.launch {
@@ -224,9 +271,11 @@ class ClockViewModel(
                 val clockJumped = RealtimeClockSyncManager.verifyClockContinuity()
                 if (clockJumped) {
                     recalculateNextChimeSchedule(settings.value)
+                    recalculateNextEyeBreakSchedule(settings.value)
                 }
 
                 checkAndTriggerChime(now)
+                checkAndTriggerEyeBreak(now)
                 checkAndTriggerAlarms(now)
 
                 if (isRunningTests) {
@@ -312,6 +361,73 @@ class ClockViewModel(
 
             AudioSynthEngine.playConfiguredAlert(context, activeSettings)
 
+            if (activeSettings.flashScreenEnabled) {
+                triggerVisualFlash()
+            }
+        }
+    }
+
+    private fun checkAndTriggerEyeBreak(now: ZonedDateTime) {
+        val activeSettings = settings.value
+        if (!activeSettings.eyeBreakEnabled) {
+            return
+        }
+
+        val nowMillis = now.toInstant().toEpochMilli()
+        if (nextEyeBreakEpochMillis <= 0L) {
+            recalculateNextEyeBreakSchedule(activeSettings)
+            return
+        }
+
+        _remainingEyeBreakSeconds.value = TimeAndAlertUtils.computeRemainingChimeSeconds(
+            nowMillis,
+            nextEyeBreakEpochMillis
+        )
+
+        if (nowMillis >= nextEyeBreakEpochMillis) {
+            nextEyeBreakEpochMillis = TimeAndAlertUtils.computeNextEyeBreakEpochMillis(
+                nowMillis = nowMillis,
+                intervalMinutes = activeSettings.eyeBreakIntervalMinutes
+            )
+            _remainingEyeBreakSeconds.value = TimeAndAlertUtils.computeRemainingChimeSeconds(
+                nowMillis,
+                nextEyeBreakEpochMillis
+            )
+
+            if (_activeEyeBreakPrompt.value == null) {
+                presentEyeBreakExercise(nowMillis = nowMillis, playFeedback = true, now = now)
+            }
+        }
+    }
+
+    private fun presentEyeBreakExercise(
+        nowMillis: Long = System.currentTimeMillis(),
+        playFeedback: Boolean = false,
+        now: ZonedDateTime = ZonedDateTime.now()
+    ) {
+        val exercises = TimeAndAlertUtils.EyeExercises
+        val idx = ((eyeExerciseCursor % exercises.size) + exercises.size) % exercises.size
+        eyeExerciseCursor = (idx + 1) % exercises.size
+        _activeEyeBreakPrompt.value = EyeBreakPromptState(
+            exercise = exercises[idx],
+            exerciseIndex = idx,
+            triggeredAtMillis = nowMillis
+        )
+
+        if (playFeedback) {
+            val activeSettings = settings.value
+            val isQuiet = TimeAndAlertUtils.isWithinQuietHours(
+                now = now,
+                enabled = activeSettings.quietHoursEnabled,
+                startHour = activeSettings.quietHoursStartHour,
+                startMinute = activeSettings.quietHoursStartMinute,
+                endHour = activeSettings.quietHoursEndHour,
+                endMinute = activeSettings.quietHoursEndMinute,
+                activeDaysOfWeek = activeSettings.quietHoursDaysOfWeek
+            )
+            if (!isQuiet) {
+                AudioSynthEngine.playConfiguredAlert(context, activeSettings)
+            }
             if (activeSettings.flashScreenEnabled) {
                 triggerVisualFlash()
             }
@@ -464,6 +580,50 @@ class ClockViewModel(
         )
     }
 
+    // ---- Eye Break & Screen Rest Reminder ----
+    fun toggleEyeBreakEnabled(enabled: Boolean) {
+        val updated = settings.value.copy(eyeBreakEnabled = enabled)
+        if (enabled) {
+            recalculateNextEyeBreakSchedule(updated)
+        }
+        persistSettings(updated)
+    }
+
+    fun updateEyeBreakInterval(minutes: Int) {
+        val clamped = minutes.coerceIn(1, 180)
+        val updated = settings.value.copy(eyeBreakIntervalMinutes = clamped)
+        recalculateNextEyeBreakSchedule(updated)
+        persistSettings(updated)
+    }
+
+    fun triggerEyeBreakNow() {
+        presentEyeBreakExercise(nowMillis = System.currentTimeMillis(), playFeedback = false)
+    }
+
+    fun nextEyeBreakExercise() {
+        val exercises = TimeAndAlertUtils.EyeExercises
+        val currentIdx = _activeEyeBreakPrompt.value?.exerciseIndex ?: -1
+        val nextIdx = (currentIdx + 1) % exercises.size
+        eyeExerciseCursor = (nextIdx + 1) % exercises.size
+        _activeEyeBreakPrompt.value = EyeBreakPromptState(
+            exercise = exercises[nextIdx],
+            exerciseIndex = nextIdx,
+            triggeredAtMillis = System.currentTimeMillis()
+        )
+    }
+
+    fun dismissEyeBreakPrompt(snoozeMinutes: Int? = null) {
+        _activeEyeBreakPrompt.value = null
+        val nowMillis = System.currentTimeMillis()
+        val delayMinutes = snoozeMinutes?.coerceIn(1, 60)
+            ?: settings.value.eyeBreakIntervalMinutes.coerceIn(1, 180)
+        nextEyeBreakEpochMillis = nowMillis + delayMinutes * 60_000L
+        _remainingEyeBreakSeconds.value = TimeAndAlertUtils.computeRemainingChimeSeconds(
+            nowMillis,
+            nextEyeBreakEpochMillis
+        )
+    }
+
     // ---- Display & Theme Customizations ----
     fun toggleShowSeconds(show: Boolean) {
         persistSettings(settings.value.copy(showSeconds = show), syncWidgets = true)
@@ -541,6 +701,18 @@ class ClockViewModel(
 
     fun updateAffirmationIndex(index: Int) {
         persistSettings(settings.value.copy(currentAffirmationIndex = index))
+    }
+
+    fun updateLayoutStyle(style: String) {
+        persistSettings(settings.value.copy(layoutStyle = style))
+    }
+
+    fun updateBackdropPattern(pattern: String) {
+        persistSettings(settings.value.copy(backdropPattern = pattern))
+    }
+
+    fun updateNightDimMode(mode: String) {
+        persistSettings(settings.value.copy(nightDimMode = mode))
     }
 
     fun updateClockSortOrder(order: String) {
@@ -661,6 +833,11 @@ class ClockViewModel(
                 put("showBreathingGuide", s.showBreathingGuide)
                 put("currentAffirmationIndex", s.currentAffirmationIndex)
                 put("clockSortOrder", s.clockSortOrder)
+                put("eyeBreakEnabled", s.eyeBreakEnabled)
+                put("eyeBreakIntervalMinutes", s.eyeBreakIntervalMinutes)
+                put("layoutStyle", s.layoutStyle)
+                put("nightDimMode", s.nightDimMode)
+                put("backdropPattern", s.backdropPattern)
             }
             json.put("settings", sJson)
 
@@ -734,10 +911,16 @@ class ClockViewModel(
                         currentFocusText = sJson.optString("currentFocusText", current.currentFocusText),
                         showBreathingGuide = sJson.optBoolean("showBreathingGuide", current.showBreathingGuide),
                         currentAffirmationIndex = sJson.optInt("currentAffirmationIndex", current.currentAffirmationIndex),
-                        clockSortOrder = sJson.optString("clockSortOrder", current.clockSortOrder)
+                        clockSortOrder = sJson.optString("clockSortOrder", current.clockSortOrder),
+                        eyeBreakEnabled = sJson.optBoolean("eyeBreakEnabled", current.eyeBreakEnabled),
+                        eyeBreakIntervalMinutes = sJson.optInt("eyeBreakIntervalMinutes", current.eyeBreakIntervalMinutes).coerceIn(1, 180),
+                        layoutStyle = sJson.optString("layoutStyle", current.layoutStyle),
+                        nightDimMode = sJson.optString("nightDimMode", current.nightDimMode),
+                        backdropPattern = sJson.optString("backdropPattern", current.backdropPattern)
                     )
                     repository.saveSettings(importedSettings)
                     recalculateNextChimeSchedule(importedSettings)
+                    recalculateNextEyeBreakSchedule(importedSettings)
                 }
 
                 val clkArray = json.optJSONArray("friendClocks")

@@ -423,6 +423,133 @@ fun AdhdSettingsPane(
                 }
             }
 
+            // Layout style (independent of colour theme): applies on tablets
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "LAYOUT STYLE",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    color = activeTheme.textSecondary
+                )
+                LayoutStyle.options.chunked(2).forEach { rowOptions ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        rowOptions.forEach { (id, label, subtitle) ->
+                            val selected = settings.layoutStyle == id
+                            Surface(
+                                onClick = { viewModel.updateLayoutStyle(id) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = activeTheme.cardBackground,
+                                border = BorderStroke(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) activeTheme.accentColor else activeTheme.dividerColor
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 52.dp)
+                                    .testTag("layout_style_${id.lowercase()}")
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (selected) activeTheme.accentColor else activeTheme.textPrimary
+                                    )
+                                    Text(
+                                        text = subtitle,
+                                        fontSize = 9.sp,
+                                        color = activeTheme.textSecondary,
+                                        maxLines = 2
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Backdrop pattern: optional camo over any colour theme and layout style
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "BACKDROP",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    color = activeTheme.textSecondary
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Backdrop.options.forEach { (id, label, subtitle) ->
+                        val selected = settings.backdropPattern == id
+                        Surface(
+                            onClick = { viewModel.updateBackdropPattern(id) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = activeTheme.cardBackground,
+                            border = BorderStroke(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) activeTheme.accentColor else activeTheme.dividerColor
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 52.dp)
+                                .testTag("backdrop_${id.lowercase()}")
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (selected) activeTheme.accentColor else activeTheme.textPrimary
+                                )
+                                Text(text = subtitle, fontSize = 9.sp, color = activeTheme.textSecondary, maxLines = 2)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Night dimming: darkens the whole clock for bedrooms and overnight use
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "NIGHT DIMMING",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    color = activeTheme.textSecondary
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NightDim.options.forEach { (id, label, subtitle) ->
+                        val selected = settings.nightDimMode == id
+                        Surface(
+                            onClick = { viewModel.updateNightDimMode(id) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = activeTheme.cardBackground,
+                            border = BorderStroke(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) activeTheme.accentColor else activeTheme.dividerColor
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 52.dp)
+                                .testTag("night_dim_${id.lowercase()}")
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (selected) activeTheme.accentColor else activeTheme.textPrimary
+                                )
+                                Text(text = subtitle, fontSize = 9.sp, color = activeTheme.textSecondary, maxLines = 2)
+                            }
+                        }
+                    }
+                }
+            }
+
             // 7 Curated Preset Themes Grid (2 per row)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AllPresetThemes.chunked(2).forEach { rowPresets ->
@@ -671,6 +798,204 @@ fun AdhdSettingsPane(
                 activeTheme = activeTheme,
                 onCheckedChange = { viewModel.toggleAlignmentEnabled(it) }
             )
+
+            // Eye Care & Screen Breaks Configuration Card
+            val remainingEyeSeconds by viewModel.remainingEyeBreakSeconds.collectAsStateWithLifecycle()
+            val (eyeMinsLeft, eyeSecsFormatted) = TimeAndAlertUtils.formatMinutesAndSeconds(remainingEyeSeconds)
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = activeTheme.cardBackground),
+                shape = RoundedCornerShape(14.dp),
+                border = hdBorderStroke(
+                    accentColor = activeTheme.accentColor,
+                    dividerColor = activeTheme.dividerColor,
+                    width = 1.dp,
+                    highlighted = settings.eyeBreakEnabled
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clickable { viewModel.toggleEyeBreakEnabled(!settings.eyeBreakEnabled) },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = if (settings.eyeBreakEnabled) activeTheme.circadianCueColor else activeTheme.accentColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = stringResource(R.string.eye_break_card_title),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = activeTheme.textPrimary
+                                )
+                            }
+                            Text(
+                                text = if (settings.eyeBreakEnabled) {
+                                    "Every ${settings.eyeBreakIntervalMinutes}m • Next pop-up in ${eyeMinsLeft}m ${eyeSecsFormatted}s"
+                                } else {
+                                    stringResource(R.string.eye_break_card_subtitle_off)
+                                },
+                                fontSize = 11.sp,
+                                color = if (settings.eyeBreakEnabled) activeTheme.circadianCueColor else activeTheme.textSecondary
+                            )
+                        }
+                        Switch(
+                            checked = settings.eyeBreakEnabled,
+                            onCheckedChange = { viewModel.toggleEyeBreakEnabled(it) },
+                            modifier = Modifier.testTag("eye_break_toggle"),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = activeTheme.onAccentColor,
+                                checkedTrackColor = activeTheme.accentColor,
+                                uncheckedThumbColor = activeTheme.textSecondary,
+                                uncheckedTrackColor = activeTheme.dividerColor
+                            )
+                        )
+                    }
+
+                    Text(
+                        text = stringResource(R.string.eye_break_section_title),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = activeTheme.accentColor,
+                        letterSpacing = 0.8.sp
+                    )
+
+                    // Quick Interval Chips (including 20m & 50m)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(20, 30, 45, 50, 60).forEach { mins ->
+                            val isSelected = settings.eyeBreakIntervalMinutes == mins
+                            Surface(
+                                onClick = { viewModel.updateEyeBreakInterval(mins) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) activeTheme.accentColor else activeTheme.bgEnd,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) activeTheme.accentColor else activeTheme.dividerColor
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 44.dp)
+                                    .testTag("eye_break_preset_$mins")
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "${mins}m",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (isSelected) activeTheme.onAccentColor else activeTheme.textPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Custom Any-Minute Stepper (1..180 min)
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = activeTheme.bgEnd,
+                        border = BorderStroke(1.dp, activeTheme.dividerColor),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedButton(
+                                    onClick = { viewModel.updateEyeBreakInterval(settings.eyeBreakIntervalMinutes - 5) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    border = BorderStroke(1.dp, activeTheme.dividerColor),
+                                    modifier = Modifier.defaultMinSize(minWidth = 44.dp, minHeight = 40.dp)
+                                ) {
+                                    Text("-5m", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = activeTheme.textPrimary)
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.updateEyeBreakInterval(settings.eyeBreakIntervalMinutes - 1) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    border = BorderStroke(1.dp, activeTheme.dividerColor),
+                                    modifier = Modifier.defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
+                                ) {
+                                    Text("-1m", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = activeTheme.textPrimary)
+                                }
+                            }
+
+                            Text(
+                                text = "${settings.eyeBreakIntervalMinutes} min",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = ChronometerMonoFont,
+                                color = activeTheme.numberColor
+                            )
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedButton(
+                                    onClick = { viewModel.updateEyeBreakInterval(settings.eyeBreakIntervalMinutes + 1) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    border = BorderStroke(1.dp, activeTheme.dividerColor),
+                                    modifier = Modifier.defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
+                                ) {
+                                    Text("+1m", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = activeTheme.textPrimary)
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.updateEyeBreakInterval(settings.eyeBreakIntervalMinutes + 5) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    border = BorderStroke(1.dp, activeTheme.dividerColor),
+                                    modifier = Modifier.defaultMinSize(minWidth = 44.dp, minHeight = 40.dp)
+                                ) {
+                                    Text("+5m", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = activeTheme.textPrimary)
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.triggerEyeBreakNow() },
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, activeTheme.accentColor),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("preview_eye_break_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = activeTheme.accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.eye_break_preview_btn),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = activeTheme.accentColor
+                        )
+                    }
+                }
+            }
 
             // Comprehensive Scheduled Quiet Hours / Evening Snooze Section
             Card(

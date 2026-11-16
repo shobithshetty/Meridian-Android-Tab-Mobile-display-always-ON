@@ -487,6 +487,53 @@ fun IntegratedAlertSnoozeBar(
                 }
             }
 
+            if (settings.eyeBreakEnabled) {
+                val eyeSecsRemaining by viewModel.remainingEyeBreakSeconds.collectAsState()
+                val (eyeMinsLeft, eyeSecsFormatted) = TimeAndAlertUtils.formatMinutesAndSeconds(eyeSecsRemaining)
+                Surface(
+                    onClick = { viewModel.triggerEyeBreakNow() },
+                    shape = RoundedCornerShape(10.dp),
+                    color = activeTheme.cardBackground,
+                    border = BorderStroke(1.dp, activeTheme.dividerColor),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 40.dp)
+                        .testTag("eye_break_status_pill")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = "Eye Rest Reminder Active",
+                                tint = activeTheme.circadianCueColor,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Eye rest in ${eyeMinsLeft}m ${eyeSecsFormatted}s (${settings.eyeBreakIntervalMinutes}m)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = ChronometerMonoFont,
+                                style = TextStyle(fontFeatureSettings = "tnum"),
+                                color = activeTheme.textPrimary
+                            )
+                        }
+                        Text(
+                            text = "TAKE BREAK",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = activeTheme.accentColor
+                        )
+                    }
+                }
+            }
+
             // Snooze 5m, +10m, and Restart Action Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),

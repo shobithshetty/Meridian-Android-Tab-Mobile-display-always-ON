@@ -112,8 +112,40 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `new installs default to the Bold layout with the Aurora theme and every style id is unique`() {
+        val defaults = ClockSettings()
+        assertEquals("BOLD", defaults.layoutStyle)
+        assertEquals("Aurora", defaults.themeName)
+        val ids = com.example.ui.components.LayoutStyle.options.map { it.first }
+        assertEquals(11, ids.size)
+        assertEquals(ids.size, ids.toSet().size)
+        assertTrue(defaults.layoutStyle in ids)
+        // Every watch face must be routed through the shared frame, and the four original styles must not be.
+        val faces = com.example.ui.components.LayoutStyle.faceIds
+        assertEquals(7, faces.size)
+        assertTrue(faces.all { it in ids })
+        assertTrue(faces.all { com.example.ui.components.isWatchFace(it) })
+        assertTrue(listOf("BOLD", "CALM", "DASHBOARD", "CLASSIC").none { com.example.ui.components.isWatchFace(it) })
+    }
+
+    @Test
+    fun `night dimming and backdrop have safe defaults and the dim follows the clock`() {
+        val defaults = ClockSettings()
+        assertEquals("AUTO", defaults.nightDimMode)
+        assertEquals("NONE", defaults.backdropPattern)
+        val dim = com.example.ui.components.NightDim
+        assertEquals(0f, dim.scrimAlpha(dim.AUTO, 12))
+        assertTrue(dim.scrimAlpha(dim.AUTO, 23) > 0f)
+        assertTrue(dim.scrimAlpha(dim.AUTO, 3) > 0f)
+        assertEquals(0f, dim.scrimAlpha(dim.OFF, 3))
+        assertTrue(dim.scrimAlpha(dim.BEDSIDE, 12) > dim.scrimAlpha(dim.AUTO, 23))
+    }
+
+    @Test
     fun `custom theme studio resolves independent background, text, and number colors plus hsv hex conversion`() {
-        assertEquals(7, AllPresetThemes.size)
+        assertEquals(9, AllPresetThemes.size)
+        assertTrue(AllPresetThemes.any { it.name == "Aurora" })
+        assertTrue(AllPresetThemes.any { it.name == "Field Gold" })
 
         val customSettings = ClockSettings(
             themeName = "Custom",
@@ -529,5 +561,47 @@ class ExampleRobolectricTest {
         )
 
         assertTrue(com.example.ui.components.openBatteryOptimizationSettings(context))
+    }
+
+    @Test
+    fun `eye break reminder supports configurable 20m or 50m intervals, exercise rotation, snooze, and backup`() = runBlocking {
+        assertTrue(TimeAndAlertUtils.EyeExercises.size >= 5)
+        val baseEpoch = 1_700_000_000_000L
+        assertEquals(baseEpoch + 20 * 60_000L, TimeAndAlertUtils.computeNextEyeBreakEpochMillis(baseEpoch, 20))
+        assertEquals(baseEpoch + 50 * 60_000L, TimeAndAlertUtils.computeNextEyeBreakEpochMillis(baseEpoch, 50))
+        assertEquals(baseEpoch + 180 * 60_000L, TimeAndAlertUtils.computeNextEyeBreakEpochMillis(baseEpoch, 999))
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val repo = ClockRepository(db.clockDao())
+        repo.checkAndPrepopulate()
+
+        val vm = com.example.ui.ClockViewModel(repo, context)
+        vm.toggleEyeBreakEnabled(true)
+        vm.updateEyeBreakInterval(50)
+        kotlinx.coroutines.delay(150)
+
+        assertTrue(vm.remainingEyeBreakSeconds.value in 2990..3000)
+
+        assertNull(vm.activeEyeBreakPrompt.value)
+        vm.triggerEyeBreakNow()
+        val firstPrompt = vm.activeEyeBreakPrompt.value
+        assertNotNull(firstPrompt)
+
+        vm.nextEyeBreakExercise()
+        val secondPrompt = vm.activeEyeBreakPrompt.value
+        assertNotNull(secondPrompt)
+        assertTrue(secondPrompt!!.exercise.id != firstPrompt!!.exercise.id)
+
+        vm.dismissEyeBreakPrompt(snoozeMinutes = 5)
+        assertNull(vm.activeEyeBreakPrompt.value)
+        assertTrue(vm.remainingEyeBreakSeconds.value in 295..300)
+
+        val backupJson = vm.exportBackup()
+        assertTrue(backupJson.contains("\"eyeBreakIntervalMinutes\""))
+
+        db.close()
     }
 }

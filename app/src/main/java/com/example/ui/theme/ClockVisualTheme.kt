@@ -136,13 +136,41 @@ val ObsidianOledTheme = ClockVisualTheme(
     circadianCueColor = Color(0xFFFFFFFF)
 )
 
+val AuroraBoldTheme = ClockVisualTheme(
+    bgStart = Color(0xFF0B0618),
+    bgEnd = Color(0xFF140A28),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFFD8CCEB),
+    numberColor = Color(0xFF9B7BFF),
+    accentColor = Color(0xFFFF7A59),
+    onAccentColor = Color(0xFF1A0A06),
+    cardBackground = Color(0xFF1A1030),
+    dividerColor = Color(0xFF4A3A78),
+    circadianCueColor = Color(0xFFFF7A59)
+)
+
+val FieldGoldTheme = ClockVisualTheme(
+    bgStart = Color(0xFF12170C),      // deep army green
+    bgEnd = Color(0xFF1C2412),
+    textPrimary = Color(0xFFF6EFD2),  // warm cream
+    textSecondary = Color(0xFFC9C28F), // khaki
+    numberColor = Color(0xFFFFC72C),  // gold / yellow
+    accentColor = Color(0xFFE1AD01),  // mustard
+    onAccentColor = Color(0xFF1A1500),
+    cardBackground = Color(0xFF1F2815), // army green card
+    dividerColor = Color(0xFF4B5A2E),   // olive drab
+    circadianCueColor = Color(0xFFE1AD01)
+)
+
 val AllPresetThemes: List<ThemePresetOption> = listOf(
+    ThemePresetOption("Aurora", "Coral & Violet", AuroraBoldTheme),
     ThemePresetOption("Midnight Cosmos", "Indigo & Violet", CosmosMidnightTheme),
     ThemePresetOption("Forest Dawn", "Emerald & Mint", DawnForestTheme),
     ThemePresetOption("Nordic Light", "Crisp Daylight", NordicWhiteTheme),
     ThemePresetOption("Sunset Aura", "Plum & Peach", SunsetWarmTheme),
     ThemePresetOption("Cyber Neon", "Synthwave Cyan", CyberNeonTheme),
     ThemePresetOption("Solar Amber", "Warm Gold", SolarAmberTheme),
+    ThemePresetOption("Field Gold", "Mustard & Army Green", FieldGoldTheme),
     ThemePresetOption("Obsidian OLED", "True Pitch Black", ObsidianOledTheme)
 )
 

@@ -44,6 +44,9 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      // Installs beside the production app so a preview never touches its data or signature.
+      applicationIdSuffix = ".preview"
+      versionNameSuffix = "-preview"
       signingConfig = signingConfigs.getByName("debugConfig")
     }
   }

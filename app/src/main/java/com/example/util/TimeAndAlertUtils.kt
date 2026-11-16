@@ -252,5 +252,63 @@ object TimeAndAlertUtils {
         val aliases = getZoneAliases(zoneId)
         return aliases.any { it.contains(q, ignoreCase = true) }
     }
+
+    data class EyeExercise(
+        val id: String,
+        val title: String,
+        val benefit: String,
+        val instruction: String,
+        val durationSeconds: Int
+    )
+
+    val EyeExercises: List<EyeExercise> = listOf(
+        EyeExercise(
+            id = "rule_20_20_20",
+            title = "20-20-20 Distant Focus",
+            benefit = "Relaxes focusing muscles strained by close screens",
+            instruction = "Look away from your monitor at an object at least 20 feet (6 meters) away—like a window view or distant wall—and let your gaze soften.",
+            durationSeconds = 20
+        ),
+        EyeExercise(
+            id = "slow_blink",
+            title = "Slow Blink Hydration Reset",
+            benefit = "Restores natural tear film and prevents dry eyes",
+            instruction = "Close your eyes gently for 2 full seconds, open smoothly, then repeat 10 slow, unhurried blinks while relaxing your jaw.",
+            durationSeconds = 20
+        ),
+        EyeExercise(
+            id = "figure_eight",
+            title = "Horizontal Figure-8 Trace",
+            benefit = "Improves smooth ocular mobility and relieves stiffness",
+            instruction = "Keep your head still and slowly trace an imaginary sideways figure-8 across the room with your eyes, switching directions halfway.",
+            durationSeconds = 30
+        ),
+        EyeExercise(
+            id = "near_far_focus",
+            title = "Near-to-Far Accommodation",
+            benefit = "Exercises lens flexibility between close and distant targets",
+            instruction = "Hold your thumb 10 inches in front of your face, focus on it for 3 seconds, then shift focus to a distant landmark for 3 seconds. Repeat 5 times.",
+            durationSeconds = 30
+        ),
+        EyeExercise(
+            id = "palming_rest",
+            title = "Warm Palming & Darkness Rest",
+            benefit = "Soothes optic fatigue and lowers visual overstimulation",
+            instruction = "Rub your palms together until warm, lightly cup them over closed eyes without pressing on your eyelids, and take 4 slow breaths.",
+            durationSeconds = 30
+        ),
+        EyeExercise(
+            id = "compass_stretch",
+            title = "Four-Point Gaze Stretch",
+            benefit = "Releases tension around extraocular muscles",
+            instruction = "Without moving your head, look smoothly up for 2 seconds, down for 2 seconds, left for 2 seconds, and right for 2 seconds. Blink between sets.",
+            durationSeconds = 20
+        )
+    )
+
+    fun computeNextEyeBreakEpochMillis(nowMillis: Long, intervalMinutes: Int): Long {
+        val safeMinutes = intervalMinutes.coerceIn(1, 180)
+        return nowMillis + safeMinutes * 60_000L
+    }
 }
 

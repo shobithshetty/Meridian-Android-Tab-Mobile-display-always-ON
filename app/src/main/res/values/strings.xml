@@ -38,4 +38,13 @@
     <string name="battery_btn_open_settings">OPEN BATTERY SETTINGS</string>
     <string name="battery_btn_battery_list">BATTERY LIST</string>
     <string name="battery_settings_unavailable_error">Could not open system Battery Settings automatically on this device. Open Android Settings → Apps → Meridian → Battery.</string>
+    <string name="eye_break_section_title">EYE CARE &amp; SCREEN BREAKS</string>
+    <string name="eye_break_card_title">Eye Rest &amp; Exercise Reminder</string>
+    <string name="eye_break_card_subtitle_off">Pop-up reminder to take eyes off your screen on a custom schedule</string>
+    <string name="eye_break_popup_badge">EYE CARE REMINDER</string>
+    <string name="eye_break_popup_heading">Look Away From Your Screen</string>
+    <string name="eye_break_popup_done">BACK TO WORK</string>
+    <string name="eye_break_popup_snooze">SNOOZE 5M</string>
+    <string name="eye_break_popup_next">Another Exercise</string>
+    <string name="eye_break_preview_btn">Preview Eye Exercise Pop-up</string>
 </resources>
