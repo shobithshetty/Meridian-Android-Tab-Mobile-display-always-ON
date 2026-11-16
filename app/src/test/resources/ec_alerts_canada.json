@@ -1,0 +1,92 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "alert_code": "FDA",
+        "alert_type": "advisory",
+        "alert_name_en": "freezing drizzle advisory",
+        "alert_name_fr": "avis de bruine verglaçante",
+        "alert_short_name_en": "Freezing drizzle (advisory)",
+        "alert_short_name_fr": "Bruine verglaçante (avis)",
+        "publication_datetime": "2026-11-16T19:29:56.040Z",
+        "expiration_datetime": "2026-11-17T08:00:56.040Z",
+        "validity_datetime": "2026-11-16T19:28:00.000Z",
+        "event_end_datetime": "2026-11-17T06:00:00.000Z",
+        "alert_text_en": "Areas of freezing drizzle continue.\n\nThe freezing drizzle is expected to end this evening .\n\nRoads, walkways, and other surfaces will likely become icy and slippery.\n\nFreezing drizzle advisories are issued when drizzle is expected to freeze on contact and create icy surfaces.\n\nPlease continue to monitor alerts and forecasts issued by Environment Canada. To report severe weather, send an email to NUstorm@ec.gc.ca, call 1-800-239-0484 or post reports on social media using #NUStorm.",
+        "alert_text_fr": "De la bruine verglaçante persiste par endroits. \n\nLa bruine verglaçante cessera au cours de la soirée.\n\nLes routes, les trottoirs et les autres surfaces deviendront probablement glacés et glissants.\n\nUn avis de bruine verglaçante est émis lorsque la bruine risque de geler au contact des surfaces et de  les rendre glacées.\n\nVeuillez continuer à surveiller les alertes et les prévisions émises par Environnement Canada. Pour signaler du temps violent, envoyez un courriel à meteoNU@ec.gc.ca, appelez au 1-800-239-0484 ou publiez un message sur les réseaux sociaux en utilisant #NUMeteo.",
+        "risk_colour_en": "yellow",
+        "risk_colour_fr": "jaune",
+        "confidence_en": null,
+        "confidence_fr": null,
+        "impact_en": null,
+        "impact_fr": null,
+        "feature_name_en": "Baker Lake",
+        "feature_name_fr": "Baker Lake",
+        "province": "NU",
+        "status_en": "ended",
+        "status_fr": "terminé",
+        "feature_id": "fea1-2499"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "alert_code": "FDA",
+        "alert_type": "advisory",
+        "alert_name_en": "freezing drizzle advisory",
+        "alert_name_fr": "avis de bruine verglaçante",
+        "alert_short_name_en": "Freezing drizzle (advisory)",
+        "alert_short_name_fr": "Bruine verglaçante (avis)",
+        "publication_datetime": "2026-11-16T19:29:56.040Z",
+        "expiration_datetime": "2026-11-17T08:00:56.040Z",
+        "validity_datetime": "2026-11-16T19:28:00.000Z",
+        "event_end_datetime": "2026-11-17T06:00:00.000Z",
+        "alert_text_en": "Areas of freezing drizzle continue.\n\nThe freezing drizzle is expected to end this evening .\n\nRoads, walkways, and other surfaces will likely become icy and slippery.\n\nFreezing drizzle advisories are issued when drizzle is expected to freeze on contact and create icy surfaces.\n\nPlease continue to monitor alerts and forecasts issued by Environment Canada. To report severe weather, send an email to NUstorm@ec.gc.ca, call 1-800-239-0484 or post reports on social media using #NUStorm.",
+        "alert_text_fr": "De la bruine verglaçante persiste par endroits. \n\nLa bruine verglaçante cessera au cours de la soirée.\n\nLes routes, les trottoirs et les autres surfaces deviendront probablement glacés et glissants.\n\nUn avis de bruine verglaçante est émis lorsque la bruine risque de geler au contact des surfaces et de  les rendre glacées.\n\nVeuillez continuer à surveiller les alertes et les prévisions émises par Environnement Canada. Pour signaler du temps violent, envoyez un courriel à meteoNU@ec.gc.ca, appelez au 1-800-239-0484 ou publiez un message sur les réseaux sociaux en utilisant #NUMeteo.",
+        "risk_colour_en": "yellow",
+        "risk_colour_fr": "jaune",
+        "confidence_en": null,
+        "confidence_fr": null,
+        "impact_en": null,
+        "impact_fr": null,
+        "feature_name_en": "Chesterfield Inlet",
+        "feature_name_fr": "Chesterfield Inlet",
+        "province": "NU",
+        "status_en": "ended",
+        "status_fr": "terminé",
+        "feature_id": "fea1-2504"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "alert_code": "FDA",
+        "alert_type": "advisory",
+        "alert_name_en": "freezing drizzle advisory",
+        "alert_name_fr": "avis de bruine verglaçante",
+        "alert_short_name_en": "Freezing drizzle (advisory)",
+        "alert_short_name_fr": "Bruine verglaçante (avis)",
+        "publication_datetime": "2026-11-16T19:29:56.040Z",
+        "expiration_datetime": "2026-11-17T08:00:56.040Z",
+        "validity_datetime": "2026-11-16T19:28:00.000Z",
+        "event_end_datetime": "2026-11-17T06:00:00.000Z",
+        "alert_text_en": "Areas of freezing drizzle continue.\n\nThe freezing drizzle is expected to end this evening .\n\nRoads, walkways, and other surfaces will likely become icy and slippery.\n\nFreezing drizzle advisories are issued when drizzle is expected to freeze on contact and create icy surfaces.\n\nPlease continue to monitor alerts and forecasts issued by Environment Canada. To report severe weather, send an email to NUstorm@ec.gc.ca, call 1-800-239-0484 or post reports on social media using #NUStorm.",
+        "alert_text_fr": "De la bruine verglaçante persiste par endroits. \n\nLa bruine verglaçante cessera au cours de la soirée.\n\nLes routes, les trottoirs et les autres surfaces deviendront probablement glacés et glissants.\n\nUn avis de bruine verglaçante est émis lorsque la bruine risque de geler au contact des surfaces et de  les rendre glacées.\n\nVeuillez continuer à surveiller les alertes et les prévisions émises par Environnement Canada. Pour signaler du temps violent, envoyez un courriel à meteoNU@ec.gc.ca, appelez au 1-800-239-0484 ou publiez un message sur les réseaux sociaux en utilisant #NUMeteo.",
+        "risk_colour_en": "yellow",
+        "risk_colour_fr": "jaune",
+        "confidence_en": null,
+        "confidence_fr": null,
+        "impact_en": null,
+        "impact_fr": null,
+        "feature_name_en": "Rankin Region including Whale Cove",
+        "feature_name_fr": "région de Rankin incluant Whale Cove",
+        "province": "NU",
+        "status_en": "ended",
+        "status_fr": "terminé",
+        "feature_id": "fea1-2503"
+      }
+    }
+  ]
+}

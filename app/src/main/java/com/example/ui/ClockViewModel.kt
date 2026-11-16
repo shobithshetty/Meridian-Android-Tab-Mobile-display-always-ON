@@ -462,6 +462,111 @@ class ClockViewModel(
         }
     }
 
+    // ---- Weather (opt-in). Nothing here touches the network unless the user turned weather on. ----
+    private data class WeatherLoopKey(
+        val enabled: Boolean,
+        val alerts: Boolean,
+        val cities: List<Triple<Int, String, String>>, // id, city label, timezone
+        val manualTick: Int
+    )
+
+    private val weatherPrefs by lazy { context.getSharedPreferences("meridian_weather", Context.MODE_PRIVATE) }
+    private val _weather = MutableStateFlow<Map<Int, com.example.data.CityWeather>>(emptyMap())
+    val weather: StateFlow<Map<Int, com.example.data.CityWeather>> = _weather.asStateFlow()
+    private val _officialAlerts = MutableStateFlow<List<com.example.data.WeatherNotice>>(emptyList())
+    val officialAlerts: StateFlow<List<com.example.data.WeatherNotice>> = _officialAlerts.asStateFlow()
+    private val weatherRefreshTick = MutableStateFlow(0)
+
+    // Must sit below the properties above: Kotlin initialises members in the order written, so starting the loop
+    // any earlier would read them before they exist.
+    init {
+        startWeatherLoop()
+    }
+
+    fun refreshWeatherNow() {
+        weatherRefreshTick.value += 1
+    }
+
+    private fun startWeatherLoop() {
+        if (isRunningTests) return
+        viewModelScope.launch {
+            combine(settings, friendClocks, weatherRefreshTick) { s, friends, tick ->
+                WeatherLoopKey(
+                    enabled = s.weatherEnabled,
+                    alerts = s.weatherAlertsEnabled,
+                    cities = friends.map { Triple(it.id, it.cityLabel.ifBlank { it.friendName }, it.timezoneId) },
+                    manualTick = tick
+                )
+            }.distinctUntilChanged().collectLatest { key ->
+                if (!key.enabled) {
+                    _weather.value = emptyMap()
+                    _officialAlerts.value = emptyList()
+                    return@collectLatest
+                }
+                // Show what we already know at once (it may be a little old, which the screen hides after 3 hours).
+                _weather.value = com.example.data.WeatherCache.fromJson(weatherPrefs.getString("cache", null)).weather
+                while (true) {
+                    refreshWeatherOnce(key)
+                    delay(30 * 60_000L) // collectLatest cancels this loop the moment a setting or the city list changes
+                }
+            }
+        }
+    }
+
+    private suspend fun refreshWeatherOnce(key: WeatherLoopKey) {
+        try {
+            val now = System.currentTimeMillis()
+            val cache = com.example.data.WeatherCache.fromJson(weatherPrefs.getString("cache", null))
+            val geo = cache.geo.toMutableMap()
+            val located = mutableListOf<Pair<Triple<Int, String, String>, com.example.data.GeoPoint>>()
+            for (city in key.cities) {
+                val shortName = city.second.substringBefore(',').trim()
+                val geoKey = "$shortName|${city.third}"
+                val point = geo[geoKey]
+                    ?: com.example.util.WeatherClient.geocode(shortName, city.third)?.also { geo[geoKey] = it }
+                if (point != null) located += city to point
+            }
+            if (located.isEmpty()) return
+
+            val body = com.example.util.WeatherClient.forecast(located.map { it.second })
+            val parsed = com.example.data.OpenMeteoParser.parse(body, now)
+            // Cities that failed this time keep their last reading instead of vanishing.
+            val merged = _weather.value.filterKeys { id -> key.cities.any { it.first == id } }.toMutableMap()
+            located.forEachIndexed { i, (city, _) -> parsed.getOrNull(i)?.let { merged[city.first] = it } }
+            _weather.value = merged
+
+            _officialAlerts.value = if (!key.alerts) emptyList() else {
+                located.filter { com.example.util.WeatherClient.hasOfficialAlerts(it.second.countryCode) }
+                    .flatMap { (city, point) ->
+                        val alertBody = runCatching { com.example.util.WeatherClient.officialAlerts(point) }.getOrNull()
+                            ?: return@flatMap emptyList()
+                        val found = if (point.countryCode == "US") com.example.data.AlertParsers.parseNws(alertBody, now)
+                        else com.example.data.AlertParsers.parseEnvironmentCanada(alertBody, now)
+                        found.map { com.example.data.WeatherNotice(city.second.substringBefore(',').trim(), it.title, it.level) }
+                    }
+                    .distinct()
+                    .sortedByDescending { it.level }
+            }
+            weatherPrefs.edit().putString("cache", com.example.data.WeatherCache.toJson(com.example.data.WeatherCacheData(geo, merged))).apply()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            // Offline or the service is down: keep showing the last reading; the next cycle tries again.
+        }
+    }
+
+    fun updateWeatherEnabled(enabled: Boolean) {
+        persistSettings(settings.value.copy(weatherEnabled = enabled))
+    }
+
+    fun updateWeatherUnit(unit: String) {
+        persistSettings(settings.value.copy(weatherUnit = unit))
+    }
+
+    fun updateWeatherAlerts(enabled: Boolean) {
+        persistSettings(settings.value.copy(weatherAlertsEnabled = enabled))
+    }
+
     // ---- Gentle alarms: fade in, repeat until answered, snooze or dismiss (in memory; overlay shown by MainActivity) ----
     private val _ringingAlarm = MutableStateFlow<com.example.ui.components.RingingAlarm?>(null)
     val ringingAlarm: StateFlow<com.example.ui.components.RingingAlarm?> = _ringingAlarm.asStateFlow()
@@ -1074,6 +1179,9 @@ class ClockViewModel(
                 put("nightDimMode", s.nightDimMode)
                 put("backdropPattern", s.backdropPattern)
                 put("rhythmStripEnabled", s.rhythmStripEnabled)
+                put("weatherEnabled", s.weatherEnabled)
+                put("weatherUnit", s.weatherUnit)
+                put("weatherAlertsEnabled", s.weatherAlertsEnabled)
                 put("alarmStyle", s.alarmStyle)
                 put("countdownsJson", s.countdownsJson)
                 put("routinesJson", s.routinesJson)
@@ -1165,6 +1273,9 @@ class ClockViewModel(
                         nightDimMode = sJson.optString("nightDimMode", current.nightDimMode),
                         backdropPattern = sJson.optString("backdropPattern", current.backdropPattern),
                         rhythmStripEnabled = sJson.optBoolean("rhythmStripEnabled", current.rhythmStripEnabled),
+                        weatherEnabled = sJson.optBoolean("weatherEnabled", current.weatherEnabled),
+                        weatherUnit = sJson.optString("weatherUnit", current.weatherUnit),
+                        weatherAlertsEnabled = sJson.optBoolean("weatherAlertsEnabled", current.weatherAlertsEnabled),
                         alarmStyle = sJson.optString("alarmStyle", current.alarmStyle),
                         countdownsJson = sJson.optString("countdownsJson", current.countdownsJson),
                         routinesJson = sJson.optString("routinesJson", current.routinesJson),

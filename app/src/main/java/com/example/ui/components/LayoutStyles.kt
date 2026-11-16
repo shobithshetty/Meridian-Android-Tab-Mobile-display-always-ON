@@ -164,8 +164,12 @@ internal data class LsCity(
     val night: Boolean,
     val home: Boolean,
     val pinned: Boolean,
-    val friend: FriendClock
-)
+    val friend: FriendClock,
+    val weather: String? = null // e.g. "☁️ 3°"; null when weather is off or the reading is old
+) {
+    /** The city name with its weather in front, so a long name that gets cut off never hides the temperature. */
+    val display: String get() = if (weather == null) name else "$weather · $name"
+}
 
 @Composable
 internal fun rememberLsTime(now: ZonedDateTime, use24: Boolean): LsTime {
@@ -200,7 +204,9 @@ internal fun rememberLsCities(
     settings: ClockSettings,
     friendClocks: List<FriendClock>
 ): List<LsCity> {
-    return remember(friendClocks, settings.clockSortOrder, settings.digital24HourFormat, now.minute, now.zone.id) {
+    val weatherUi = LocalWeather.current
+    return remember(friendClocks, settings.clockSortOrder, settings.digital24HourFormat, now.minute, now.zone.id, weatherUi) {
+        val nowMillis = now.toInstant().toEpochMilli()
         val timeFmt = DateTimeFormatter.ofPattern(if (settings.digital24HourFormat) "HH:mm" else "h:mm", Locale.US)
         val apFmt = DateTimeFormatter.ofPattern("a", Locale.US)
         val sorted = TimeAndAlertUtils.getSortedFriendClocks(friendClocks, settings.clockSortOrder, now)
@@ -217,7 +223,8 @@ internal fun rememberLsCities(
                 night = t.hour >= 19 || t.hour < 6,
                 home = zone.id == now.zone.id,
                 pinned = c.showInWidget,
-                friend = c
+                friend = c,
+                weather = weatherUi.summaryFor(c.id, nowMillis)
             )
         }
     }
@@ -553,7 +560,7 @@ fun BoldClockLayout(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.size(6.dp).clip(CircleShape).background(if (city.night) LsNight else LsDay))
                                     Text(
-                                        text = city.name.uppercase(Locale.US),
+                                        text = city.display.uppercase(Locale.US),
                                         fontSize = m.sp(10f), letterSpacing = 1.5.sp, fontWeight = FontWeight.Medium,
                                         color = if (city.home) ink else inkSoft,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -690,7 +697,7 @@ fun CalmClockLayout(
                             ) {
                                 Column(Modifier.padding(horizontal = 12.dp, vertical = if (m.compactCells) 6.dp else 10.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text(city.name, fontSize = m.sp(11f), color = inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Text(city.display, fontSize = m.sp(11f), color = inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                         Box(Modifier.size(6.dp).clip(CircleShape).background(if (city.night) Color(0xFF7F8CFF) else activeTheme.accentColor))
                                     }
                                     Row(verticalAlignment = Alignment.Bottom) {
@@ -845,7 +852,7 @@ fun DashboardClockLayout(
                                                 verticalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(city.name, fontSize = m.sp(12f), fontWeight = FontWeight.Medium, color = inkSoft,
+                                                    Text(city.display, fontSize = m.sp(12f), fontWeight = FontWeight.Medium, color = inkSoft,
                                                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                                     Box(Modifier.size(6.dp).clip(CircleShape).background(if (city.night) Color(0xFF8B9BFF) else activeTheme.accentColor))
                                                 }

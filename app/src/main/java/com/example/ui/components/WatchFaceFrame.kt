@@ -153,7 +153,7 @@ internal fun FaceCityList(
                                 .background(if (c.night) Color(0xFF8B9BFF) else d.theme.accentColor)
                         )
                         Text(
-                            c.name.uppercase(), fontSize = m.sp(10f), letterSpacing = 1.2.sp,
+                            c.display.uppercase(), fontSize = m.sp(10f), letterSpacing = 1.2.sp,
                             color = if (c.home) d.theme.textPrimary else d.theme.textSecondary,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f).padding(start = 6.dp)
@@ -327,7 +327,7 @@ internal fun FlipFace(m: LsMetrics, d: FaceData) {
                                     .lsCityGestures(d.toggleControls) { d.openCity(c) }
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                Text(c.name.uppercase(), fontSize = m.sp(9f), letterSpacing = 1.2.sp, color = d.theme.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(c.display.uppercase(), fontSize = m.sp(9f), letterSpacing = 1.2.sp, color = d.theme.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(
                                     c.time + if (c.ampm.isNotEmpty()) " ${c.ampm}" else "", fontSize = m.sp(18f), fontWeight = FontWeight.Bold,
                                     fontFamily = ChronometerDisplayFont, color = d.theme.numberColor, maxLines = 1

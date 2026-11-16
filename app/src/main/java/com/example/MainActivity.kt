@@ -178,6 +178,9 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
     var isAmbientDialogShowing by rememberSaveable { mutableStateOf(false) }
     val ringingAlarm by viewModel.ringingAlarm.collectAsState()
     val ambient by viewModel.ambient.collectAsState()
+    val weatherByCity by viewModel.weather.collectAsState()
+    val officialAlerts by viewModel.officialAlerts.collectAsState()
+    val weatherUi = remember(weatherByCity, settings.weatherUnit) { WeatherUi(weatherByCity, settings.weatherUnit) }
     val focusSession by viewModel.focusSession.collectAsState()
     val focusCompletedLabel by viewModel.focusCompletedLabel.collectAsState()
 
@@ -220,7 +223,8 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
 
     CompositionLocalProvider(
         LocalFocusLauncher provides { isFocusDialogShowing = true },
-        LocalAmbientLauncher provides { isAmbientDialogShowing = true }
+        LocalAmbientLauncher provides { isAmbientDialogShowing = true },
+        LocalWeather provides weatherUi
     ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -275,6 +279,10 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
             val ambientChipText = ambient?.let { a ->
                 "♪ ${a.kind.label}" + (a.endsAtMillis?.let { " · ${SleepTimer.remainingText(it - nowMillis)}" } ?: "")
             }
+            val weatherNotices = remember(friendClocks, weatherUi, officialAlerts, currentLocalTime.minute) {
+                if (!settings.weatherEnabled) emptyList()
+                else buildWeatherNotices(friendClocks, weatherUi, officialAlerts, nowMillis, java.time.ZoneId.systemDefault())
+            }
             val isPhone = minOf(maxWidth, maxHeight) < 600.dp
             val overlayDock = posture == AdaptiveScreenPosture.SHORT_LANDSCAPE
             val dockTopPadding = 6.dp + (if (focusSession != null) 50.dp else 0.dp) + (if (warningText != null) 40.dp else 0.dp)
@@ -283,6 +291,8 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                     settings = settings, now = currentLocalTime, theme = activeTheme,
                     onRoutineDone = { id, day -> viewModel.completeRoutine(id, day) },
                     ambientText = ambientChipText, onAmbientClick = { isAmbientDialogShowing = true },
+                    weatherNotices = weatherNotices,
+                    maxChips = if (isPhone) 2 else 6,
                     plainWeek = !isPhone,
                     modifier = Modifier
                         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
@@ -422,6 +432,8 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 settings = settings, now = currentLocalTime, theme = activeTheme,
                 onRoutineDone = { id, day -> viewModel.completeRoutine(id, day) },
                 ambientText = ambientChipText, onAmbientClick = { isAmbientDialogShowing = true },
+                weatherNotices = weatherNotices,
+                maxChips = 1, // floats over the free top centre, so it must stay narrow
                 plainWeek = false,
                 modifier = Modifier.align(Alignment.TopCenter)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))

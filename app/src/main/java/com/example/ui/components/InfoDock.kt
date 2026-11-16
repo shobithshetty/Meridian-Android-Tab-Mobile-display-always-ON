@@ -69,34 +69,75 @@ fun InfoDock(
     modifier: Modifier = Modifier,
     plainWeek: Boolean = true,
     ambientText: String? = null,
-    onAmbientClick: () -> Unit = {}
+    onAmbientClick: () -> Unit = {},
+    weatherNotices: List<com.example.data.WeatherNotice> = emptyList(),
+    /** Small screens have room for only a chip or two; the most important ones are kept (see [DockPriority]). */
+    maxChips: Int = 6
 ) {
     val country = remember { Locale.getDefault().country }
     val content = buildDockContent(settings, now, country, plainWeek)
-    if (content.isEmpty && ambientText == null) return
+    if (content.isEmpty && ambientText == null && weatherNotices.isEmpty()) return
 
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-    FlowRow(
-        modifier = Modifier.widthIn(max = 560.dp).testTag("info_dock"),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        content.dayInfo?.let { DockChip(it, theme, tag = "dock_day_info") }
-        ambientText?.let { DockChip(it, theme, tag = "dock_ambient", onClick = onAmbientClick) }
+    // Each chip carries a priority; the top [maxChips] are kept, then shown in their natural order.
+    val items = buildList<DockItem> {
+        content.dayInfo?.let { add(DockItem(DockPriority.WEEK) { DockChip(it, theme, tag = "dock_day_info") }) }
+        weatherNotices.forEachIndexed { i, n ->
+            // Serious ones get the accent outline; a plain "rain soon" heads-up stays quiet.
+            add(DockItem(if (n.level >= 2) DockPriority.WEATHER_SERIOUS else DockPriority.WEATHER_MINOR) {
+                DockChip(
+                    text = (if (n.level >= 2) "⚠️ " else "") + "${n.city}: ${n.text}",
+                    theme = theme, highlight = n.level >= 2, tag = "dock_weather_$i"
+                )
+            })
+        }
+        ambientText?.let { add(DockItem(DockPriority.AMBIENT) { DockChip(it, theme, tag = "dock_ambient", onClick = onAmbientClick) }) }
         content.countdowns.forEach { (event, text) ->
-            DockChip(
-                text = "${event.label} · $text", theme = theme, bar = event.barFraction(now), tag = "dock_countdown_${event.id}"
-            )
+            add(DockItem(DockPriority.COUNTDOWN) {
+                DockChip(
+                    text = "${event.label} · $text", theme = theme, bar = event.barFraction(now), tag = "dock_countdown_${event.id}"
+                )
+            })
         }
         content.dueRoutines.forEach { r ->
-            DockChip(
-                text = "○ ${r.label}", theme = theme, highlight = true, tag = "dock_routine_${r.id}",
-                onClick = { onRoutineDone(r.id, now.toLocalDate().toEpochDay()) }
-            )
+            add(DockItem(DockPriority.ROUTINE) {
+                DockChip(
+                    text = "○ ${r.label}", theme = theme, highlight = true, tag = "dock_routine_${r.id}",
+                    onClick = { onRoutineDone(r.id, now.toLocalDate().toEpochDay()) }
+                )
+            })
         }
     }
+    val shown = selectDockItems(items.map { it.priority }, maxChips).map { items[it] }
+
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        FlowRow(
+            modifier = Modifier.widthIn(max = 560.dp).testTag("info_dock"),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            shown.forEach { it.content() }
+        }
     }
 }
+
+/** Lower number = more important. */
+object DockPriority {
+    const val WEATHER_SERIOUS = 0
+    const val ROUTINE = 1
+    const val WEATHER_MINOR = 2
+    const val AMBIENT = 3
+    const val COUNTDOWN = 4
+    const val WEEK = 5
+}
+
+private class DockItem(val priority: Int, val content: @Composable () -> Unit)
+
+/**
+ * Which chips to keep: the [max] most important (ties keep their original order), returned as indexes in the
+ * original order so the row still reads naturally.
+ */
+fun selectDockItems(priorities: List<Int>, max: Int): List<Int> =
+    priorities.indices.sortedWith(compareBy({ priorities[it] }, { it })).take(max.coerceAtLeast(0)).sorted()
 
 @Composable
 private fun DockChip(

@@ -392,6 +392,212 @@ class ExampleRobolectricTest {
         assertEquals(com.example.audio.AmbientKind.PINK, com.example.audio.AmbientKind.fromId("nonsense"))
     }
 
+    private fun forecastJson(currentTime: String, code: Int, times: List<String>, precip: List<Double>, prob: List<Int?>?, temps: List<Double>): String {
+        val probPart = prob?.let { ",\"precipitation_probability\":[${it.joinToString(",") { p -> p?.toString() ?: "null" }}]" } ?: ""
+        return """{"current":{"time":"$currentTime","temperature_2m":13.3,"weather_code":$code,"is_day":1},
+            "hourly":{"time":[${times.joinToString(",") { "\"$it\"" }}],"precipitation":[${precip.joinToString(",")}]$probPart,
+            "temperature_2m":[${temps.joinToString(",")}]}}"""
+    }
+
+    @Test
+    fun `open-meteo forecasts are read for one place or many and find rain that is coming`() {
+        val hours = listOf("2026-11-16T14:00", "2026-11-16T15:00", "2026-11-16T16:00", "2026-11-16T17:00", "2026-11-16T18:00", "2026-11-16T19:00")
+        val rainLater = forecastJson("2026-11-16T14:15", 3, hours, listOf(0.0, 0.0, 1.2, 0.4, 0.0, 0.0), listOf(0, 10, 80, 70, 0, 0), listOf(13.0, 12.0, 12.0, 11.0, 10.0, 9.0))
+        val single = com.example.data.OpenMeteoParser.parse(rainLater, 1_000L)
+        assertEquals(1, single.size)
+        val w = single[0]!!
+        assertEquals(13.3, w.tempC, 0.001)
+        assertEquals(105, w.rainInMinutes) // 14:15 -> 16:00
+        assertEquals(13.0, w.maxC24, 0.001)
+        assertEquals(9.0, w.minC24, 0.001)
+        assertEquals(1_000L, w.fetchedMillis)
+
+        val many = com.example.data.OpenMeteoParser.parse("[$rainLater,$rainLater]", 5L)
+        assertEquals(2, many.size)
+        // Raining in this hour counts as "now" (0); a dry spell has no rain time at all; no chance data trusts the amount.
+        val now = com.example.data.OpenMeteoParser.parse(forecastJson("2026-11-16T14:15", 61, hours, listOf(2.0, 0.0, 0.0, 0.0, 0.0, 0.0), listOf(90, 0, 0, 0, 0, 0), List(6) { 10.0 }), 0L)[0]!!
+        assertEquals(0, now.rainInMinutes)
+        val dry = com.example.data.OpenMeteoParser.parse(forecastJson("2026-11-16T14:15", 0, hours, List(6) { 0.0 }, listOf(0, 0, 0, 0, 0, 0), List(6) { 10.0 }), 0L)[0]!!
+        assertEquals(null, dry.rainInMinutes)
+        val noChance = com.example.data.OpenMeteoParser.parse(forecastJson("2026-11-16T14:15", 3, hours, listOf(0.0, 1.0, 0.0, 0.0, 0.0, 0.0), null, List(6) { 10.0 }), 0L)[0]!!
+        assertEquals(45, noChance.rainInMinutes)
+        // Light drizzle below the 0.2 mm threshold, or a low chance, is ignored.
+        val drizzle = com.example.data.OpenMeteoParser.parse(forecastJson("2026-11-16T14:15", 3, hours, listOf(0.1, 0.1, 5.0, 0.0, 0.0, 0.0), listOf(80, 80, 20, 0, 0, 0), List(6) { 10.0 }), 0L)[0]!!
+        assertEquals(null, drizzle.rainInMinutes)
+        // A broken place becomes null instead of breaking the others.
+        assertEquals(null, com.example.data.OpenMeteoParser.parse("[{\"oops\":1}]", 0L)[0])
+    }
+
+    @Test
+    fun `temperatures round and convert, and warnings follow the rules`() {
+        val u = com.example.data.WeatherUnits
+        assertEquals("13°", u.temp(13.4, "C"))
+        assertEquals("56°", u.temp(13.4, "F"))
+        assertEquals("0°", u.temp(-0.3, "C")) // never "-0"
+        assertEquals("-5°", u.temp(-5.0, "C"))
+        fun w(code: Int = 3, rain: Int? = null, max: Double = 20.0, min: Double = 10.0, fetched: Long = 0L) =
+            com.example.data.CityWeather(15.0, code, true, rain, max, min, fetched)
+        val rules = com.example.data.WeatherWarnings
+        assertEquals(emptyList<com.example.data.WeatherNotice>(), rules.forCity("Toronto, Canada", w(), "C", true))
+        assertEquals("Rain in 45 min", rules.forCity("Toronto, Canada", w(rain = 42), "C", true).single().text) // rounds up to 5
+        assertEquals(emptyList<com.example.data.WeatherNotice>(), rules.forCity("London, UK", w(rain = 42), "C", false)) // minor only for home
+        assertEquals(emptyList<com.example.data.WeatherNotice>(), rules.forCity("Toronto, Canada", w(code = 61, rain = 42), "C", true)) // already raining
+        assertEquals("Thunderstorm", rules.forCity("Doha, Qatar", w(code = 95), "C", false).single().text)
+        assertEquals(2, rules.forCity("Doha, Qatar", w(code = 95), "C", false).single().level)
+        assertEquals("Heat up to 104°", rules.forCity("Doha, Qatar", w(max = 40.0), "F", false).single().text)
+        assertEquals("Extreme cold -20°", rules.forCity("Oslo, Norway", w(min = -20.0), "C", false).single().text)
+        assertEquals("Toronto", rules.forCity("Toronto, Canada", w(code = 95), "C", false).single().city)
+        assertTrue(rules.isFresh(w(fetched = 0L), rules.MAX_AGE_MILLIS))
+        assertTrue(!rules.isFresh(w(fetched = 0L), rules.MAX_AGE_MILLIS + 1))
+        assertTrue(com.example.data.WeatherCodes.info(0, false).icon != com.example.data.WeatherCodes.info(0, true).icon) // moon at night
+    }
+
+    @Test
+    fun `official alerts are read from both services and expired or test ones are skipped`() {
+        val now = java.time.Instant.parse("2026-11-16T12:00:00Z").toEpochMilli()
+        val nws = """{"features":[
+            {"properties":{"status":"Actual","messageType":"Alert","event":"Flood Warning","severity":"Severe","ends":"2026-11-17T23:48:00-06:00"}},
+            {"properties":{"status":"Actual","messageType":"Update","event":"Tornado Warning","severity":"Extreme","expires":"2026-11-16T14:00:00-06:00","ends":null}},
+            {"properties":{"status":"Actual","messageType":"Alert","event":"Frost Advisory","severity":"Minor","expires":"2026-11-15T01:00:00-06:00"}},
+            {"properties":{"status":"Test","messageType":"Alert","event":"Test Message","severity":"Minor","expires":"2026-11-20T01:00:00-06:00"}},
+            {"properties":{"status":"Actual","messageType":"Cancel","event":"Wind Advisory","severity":"Minor","expires":"2026-11-20T01:00:00-06:00"}}]}"""
+        val found = com.example.data.AlertParsers.parseNws(nws, now)
+        assertEquals(listOf("Flood Warning", "Tornado Warning"), found.map { it.title })
+        assertEquals(listOf(2, 3), found.map { it.level })
+        val ec = """{"features":[
+            {"properties":{"alert_type":"advisory","alert_short_name_en":"Fog (advisory)","risk_colour_en":"yellow","expiration_datetime":"2026-11-16T19:58:02.461Z"}},
+            {"properties":{"alert_type":"advisory","alert_short_name_en":"Fog (advisory)","risk_colour_en":"yellow","expiration_datetime":"2026-11-16T19:58:02.461Z"}},
+            {"properties":{"alert_type":"warning","alert_short_name_en":"Snow squall (warning)","risk_colour_en":"red","expiration_datetime":"2026-11-16T18:00:00.000Z"}},
+            {"properties":{"alert_type":"ended","alert_short_name_en":"Rain (ended)","expiration_datetime":"2026-11-16T18:00:00.000Z"}},
+            {"properties":{"alert_type":"warning","alert_short_name_en":"Old warning","risk_colour_en":"orange","expiration_datetime":"2026-11-15T18:00:00.000Z"}}]}"""
+        val ca = com.example.data.AlertParsers.parseEnvironmentCanada(ec, now)
+        assertEquals(listOf("Fog (advisory)", "Snow squall (warning)"), ca.map { it.title }) // duplicate merged, ended and expired dropped
+        assertEquals(listOf(1, 3), ca.map { it.level })
+        assertEquals(emptyList<com.example.data.OfficialAlert>(), com.example.data.AlertParsers.parseNws("garbage", now))
+        assertEquals(emptyList<com.example.data.OfficialAlert>(), com.example.data.AlertParsers.parseEnvironmentCanada("{}", now))
+    }
+
+    @Test
+    fun `weather cache survives a round trip and a damaged one is ignored`() {
+        val data = com.example.data.WeatherCacheData(
+            geo = mapOf("Toronto|America/Toronto" to com.example.data.GeoPoint(43.7, -79.4, "CA")),
+            weather = mapOf(7 to com.example.data.CityWeather(3.5, 61, false, null, 6.0, -1.0, 99L), 8 to com.example.data.CityWeather(20.0, 0, true, 45, 25.0, 12.0, 100L))
+        )
+        assertEquals(data, com.example.data.WeatherCache.fromJson(com.example.data.WeatherCache.toJson(data)))
+        assertEquals(com.example.data.WeatherCacheData(), com.example.data.WeatherCache.fromJson("not json"))
+        assertEquals(com.example.data.WeatherCacheData(), com.example.data.WeatherCache.fromJson(null))
+    }
+
+    @Test
+    fun `weather requests carry only coordinates and names, and weather is off by default`() {
+        val client = com.example.util.WeatherClient
+        val points = listOf(com.example.data.GeoPoint(43.70643, -79.39864, "CA"), com.example.data.GeoPoint(51.5074, -0.1278, "GB"))
+        val url = client.forecastUrl(points)
+        assertTrue(url.startsWith("https://api.open-meteo.com/v1/forecast?latitude=43.706,51.507&longitude=-79.399,-0.128"))
+        assertTrue("timezone=auto" in url && "temperature_unit=celsius" in url)
+        assertTrue(client.geocodeUrl("São Paulo").contains("S%C3%A3o+Paulo"))
+        assertEquals("https://api.weather.gov/alerts/active?point=43.706,-79.399", client.nwsUrl(points[0]))
+        assertTrue(client.ecUrl(points[0]).contains("bbox=-79.419,43.686,-79.379,43.726"))
+        assertTrue(client.hasOfficialAlerts("US") && client.hasOfficialAlerts("CA") && !client.hasOfficialAlerts("GB"))
+        // Every outgoing URL is made only from the pieces above: no place for a name, email, id or device value.
+        listOf(url, client.nwsUrl(points[0]), client.ecUrl(points[0])).forEach { u ->
+            assertTrue(u.startsWith("https://"))
+            assertTrue("@" !in u && "android_id" !in u.lowercase() && "email" !in u.lowercase())
+        }
+        val defaults = ClockSettings()
+        assertTrue(!defaults.weatherEnabled)
+        assertEquals("C", defaults.weatherUnit)
+    }
+
+    @Test
+    fun `small screens keep only the most important dock chips and show them in natural order`() {
+        val p = com.example.ui.components.DockPriority
+        // week chip, ambient, serious weather, countdown, routine
+        val priorities = listOf(p.WEEK, p.AMBIENT, p.WEATHER_SERIOUS, p.COUNTDOWN, p.ROUTINE)
+        assertEquals(listOf(2), com.example.ui.components.selectDockItems(priorities, 1)) // storm warning wins
+        assertEquals(listOf(2, 4), com.example.ui.components.selectDockItems(priorities, 2)) // plus the due routine
+        assertEquals(listOf(0, 1, 2, 3, 4), com.example.ui.components.selectDockItems(priorities, 6)) // all, unchanged order
+        assertEquals(emptyList<Int>(), com.example.ui.components.selectDockItems(priorities, 0))
+        // Ties keep their original order.
+        assertEquals(listOf(0), com.example.ui.components.selectDockItems(listOf(p.COUNTDOWN, p.COUNTDOWN), 1))
+    }
+
+    @Test
+    fun `dock weather notices put official alerts first, hide old data and only warn about rain for home`() {
+        val zone = java.time.ZoneId.of("America/Toronto")
+        val toronto = com.example.data.FriendClock(1, "Toronto", "America/Toronto", "Toronto, Canada")
+        val london = com.example.data.FriendClock(2, "London", "Europe/London", "London, UK")
+        val now = 10_000_000L
+        fun cw(rain: Int?, max: Double = 15.0, fetched: Long = now) = com.example.data.CityWeather(10.0, 3, true, rain, max, 5.0, fetched)
+        val ui = com.example.ui.components.WeatherUi(mapOf(1 to cw(rain = 30), 2 to cw(rain = 30)), "C")
+        val official = listOf(com.example.data.WeatherNotice("Toronto", "Flood Warning", 2))
+        val notices = com.example.ui.components.buildWeatherNotices(listOf(toronto, london), ui, official, now, zone)
+        assertEquals(listOf("Flood Warning", "Rain in 30 min"), notices.map { it.text }) // London's rain-soon is not raised
+        // Old readings (over 3h) are not turned into warnings or shown on cities.
+        val stale = com.example.ui.components.WeatherUi(mapOf(1 to cw(rain = 30, fetched = 0L)), "C")
+        assertEquals(emptyList<com.example.data.WeatherNotice>(), com.example.ui.components.buildWeatherNotices(listOf(toronto), stale, emptyList(), now + 4 * 3_600_000L, zone))
+        assertEquals(null, stale.summaryFor(1, now + 4 * 3_600_000L))
+        assertTrue(ui.summaryFor(1, now)!!.endsWith("10°"))
+        // At most two chips, most serious first.
+        val many = com.example.ui.components.buildWeatherNotices(listOf(toronto), ui, listOf(
+            com.example.data.WeatherNotice("A", "x", 1), com.example.data.WeatherNotice("B", "y", 3), com.example.data.WeatherNotice("C", "z", 2)), now, zone)
+        assertEquals(2, many.size)
+        assertEquals(3, many[0].level)
+    }
+
+    private fun fixture(name: String): String =
+        checkNotNull(javaClass.classLoader.getResourceAsStream(name)) { "missing fixture $name" }.use { it.readBytes().toString(Charsets.UTF_8) }
+
+    @Test
+    fun `real service responses are read correctly`() {
+        // These files are genuine replies saved from the live services (geometry removed from the alert ones).
+        val forecast = com.example.data.OpenMeteoParser.parse(fixture("openmeteo_two_places.json"), 123L)
+        assertEquals(2, forecast.size)
+        forecast.forEach { w ->
+            assertTrue(w != null)
+            assertTrue("temperature in a sane range", w!!.tempC in -60.0..60.0)
+            assertTrue(w.code in 0..99)
+            assertTrue(w.maxC24 >= w.minC24)
+            assertEquals(123L, w.fetchedMillis)
+        }
+        val now = java.time.Instant.parse("2026-11-16T12:00:00Z").toEpochMilli()
+        val nws = com.example.data.AlertParsers.parseNws(fixture("nws_alerts_texas.json"), now)
+        assertEquals(listOf("Coastal Flood Advisory", "High Surf Advisory", "Rip Current Statement"), nws.map { it.title })
+        assertTrue(nws.all { it.level == 1 && it.expiresMillis != null })
+        // The same alerts are gone once their end time has passed.
+        assertEquals(emptyList<com.example.data.OfficialAlert>(), com.example.data.AlertParsers.parseNws(fixture("nws_alerts_texas.json"), java.time.Instant.parse("2026-11-19T00:00:00Z").toEpochMilli()))
+        val ec = com.example.data.AlertParsers.parseEnvironmentCanada(fixture("ec_alerts_canada.json"), now)
+        assertEquals(listOf("Freezing drizzle (advisory)"), ec.map { it.title }) // three identical area alerts merge into one
+        assertEquals(1, ec.single().level)
+        val berlin = com.example.util.WeatherClient.pickGeo(fixture("geocode_berlin.json"), "Europe/Berlin")!!
+        assertEquals("DE", berlin.countryCode)
+        assertEquals(52.5, berlin.lat, 0.5)
+        assertEquals(13.4, berlin.lon, 0.5)
+        assertEquals(null, com.example.util.WeatherClient.pickGeo("{}", "Europe/Berlin"))
+        assertEquals(null, com.example.util.WeatherClient.pickGeo("garbage", "Europe/Berlin"))
+    }
+
+    /** Calls the real services through the app's own network code. Off by default; run with MERIDIAN_LIVE_WEATHER=1. */
+    @Test
+    fun `live weather services work end to end when asked`() {
+        org.junit.Assume.assumeTrue(System.getenv("MERIDIAN_LIVE_WEATHER") == "1")
+        kotlinx.coroutines.runBlocking {
+            val client = com.example.util.WeatherClient
+            val toronto = client.geocode("Toronto", "America/Toronto")!!
+            assertEquals("CA", toronto.countryCode)
+            val newYork = client.geocode("New York", "America/New_York")!!
+            assertEquals("US", newYork.countryCode)
+            val readings = com.example.data.OpenMeteoParser.parse(client.forecast(listOf(toronto, newYork)), System.currentTimeMillis())
+            assertEquals(2, readings.size)
+            readings.forEach { assertTrue(it != null && it.tempC in -60.0..60.0) }
+            val now = System.currentTimeMillis()
+            // Either may legitimately be empty on a quiet day; the point is that both calls succeed and parse.
+            com.example.data.AlertParsers.parseEnvironmentCanada(client.officialAlerts(toronto)!!, now)
+            com.example.data.AlertParsers.parseNws(client.officialAlerts(newYork)!!, now)
+            println("LIVE OK: Toronto ${readings[0]!!.tempC}C code ${readings[0]!!.code}; New York ${readings[1]!!.tempC}C code ${readings[1]!!.code}")
+        }
+    }
+
     @Test
     fun `custom theme studio resolves independent background, text, and number colors plus hsv hex conversion`() {
         assertEquals(9, AllPresetThemes.size)

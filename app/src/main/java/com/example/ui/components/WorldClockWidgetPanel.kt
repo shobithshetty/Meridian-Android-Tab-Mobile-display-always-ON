@@ -481,7 +481,7 @@ private fun CompactCityRibbonCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = friendClock.cityLabel.ifBlank { friendClock.friendName },
+                    text = cityTitleWithWeather(friendClock),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = activeTheme.textPrimary,
@@ -617,7 +617,7 @@ fun FriendLocalClockItem(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = friendClock.cityLabel.ifBlank { friendClock.friendName },
+                            text = cityTitleWithWeather(friendClock),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = activeTheme.textPrimary,

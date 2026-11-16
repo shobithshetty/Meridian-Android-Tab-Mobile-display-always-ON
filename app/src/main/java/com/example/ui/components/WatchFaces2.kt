@@ -311,7 +311,7 @@ internal fun TimelineFace(m: LsMetrics, d: FaceData) {
                             .lsCityGestures(d.toggleControls) { d.openCity(city) }
                             .padding(end = 8.dp)
                     ) {
-                        Text(city.name.uppercase(), fontSize = m.sp(9f), letterSpacing = 1.2.sp, color = if (city.home) th.textPrimary else th.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(city.display.uppercase(), fontSize = m.sp(9f), letterSpacing = 1.2.sp, color = if (city.home) th.textPrimary else th.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(city.time + if (city.ampm.isNotEmpty()) " ${city.ampm}" else "", fontSize = m.sp(14f), fontWeight = FontWeight.SemiBold, color = th.textPrimary, fontFamily = ChronometerDisplayFont, maxLines = 1)
                     }
                     val zone = TimeAndAlertUtils.safeZoneId(city.friend.timezoneId)

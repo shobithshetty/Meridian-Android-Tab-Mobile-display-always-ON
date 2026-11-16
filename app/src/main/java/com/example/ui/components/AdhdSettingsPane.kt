@@ -597,6 +597,7 @@ fun AdhdSettingsPane(
             AlwaysOnSettingsSection(settings, activeTheme, viewModel)
             PlannerSettingsSection(settings, activeTheme, viewModel)
             SoundAndBackupSettingsSection(settings, activeTheme, viewModel)
+            WeatherSettingsSection(settings, activeTheme, viewModel)
 
             // 7 Curated Preset Themes Grid (2 per row)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

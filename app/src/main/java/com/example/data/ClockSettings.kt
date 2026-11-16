@@ -45,6 +45,9 @@ data class ClockSettings(
     val rhythmStripEnabled: Boolean = true, // thin 24h day bar along the bottom of every layout
     val backdropPattern: String = "NONE", // "NONE" or "CAMO" - faint pattern over any theme/layout
     val nightDimMode: String = "AUTO", // "OFF", "AUTO" (dims 10pm-6am), "SUN" (sunset to sunrise), "BEDSIDE" (always very dark)
+    val weatherEnabled: Boolean = false, // off by default: turning it on is what lets the app use the internet
+    val weatherUnit: String = "C", // "C" or "F"
+    val weatherAlertsEnabled: Boolean = true, // official alerts (US and Canada), only fetched while weather is on
     val alarmStyle: String = "GENTLE", // "GENTLE" = fades in and repeats until dismissed/snoozed; "SINGLE" = one chime
     val autoBackupUri: String = "", // persisted folder (SAF tree) for daily backups; "" = off. Never exported in a backup.
     val lastAutoBackupEpochDay: Long = -1L,
