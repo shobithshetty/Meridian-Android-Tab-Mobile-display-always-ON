@@ -24,3 +24,9 @@ test_output.txt
 .aistudio/
 metadata.json
 
+
+# Signing material must never be committed
+keystore.properties
+*.jks
+*.keystore
+*.p12
