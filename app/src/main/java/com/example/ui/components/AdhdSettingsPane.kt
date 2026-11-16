@@ -472,6 +472,48 @@ fun AdhdSettingsPane(
                 }
             }
 
+            // Day strip: thin 24h bar along the bottom with alarms and focus sessions
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "DAY STRIP",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    color = activeTheme.textSecondary
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        Triple(true, "On", "Day progress, alarms, focus"),
+                        Triple(false, "Off", "No bar along the bottom")
+                    ).forEach { (on, label, subtitle) ->
+                        val selected = settings.rhythmStripEnabled == on
+                        Surface(
+                            onClick = { viewModel.updateRhythmStrip(on) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = activeTheme.cardBackground,
+                            border = BorderStroke(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) activeTheme.accentColor else activeTheme.dividerColor
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 52.dp)
+                                .testTag("rhythm_strip_${label.lowercase()}")
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (selected) activeTheme.accentColor else activeTheme.textPrimary
+                                )
+                                Text(text = subtitle, fontSize = 9.sp, color = activeTheme.textSecondary, maxLines = 2)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Backdrop pattern: optional camo over any colour theme and layout style
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(

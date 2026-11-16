@@ -188,7 +188,7 @@ private fun FaceChimeLine(d: FaceData, m: LsMetrics, modifier: Modifier = Modifi
 internal fun AnalogFace(m: LsMetrics, d: FaceData) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > maxHeight * 1.15f
-        val dial = if (wide) minOf(maxHeight, maxWidth * 0.52f) else minOf(maxWidth, maxHeight * 0.56f)
+        val dial = if (wide) minOf(maxHeight, maxWidth * 0.52f) else minOf(maxWidth, maxHeight * (if (m.phone) 0.40f else 0.56f))
 
         @Composable
         fun Info(modifier: Modifier) {
@@ -205,7 +205,8 @@ internal fun AnalogFace(m: LsMetrics, d: FaceData) {
                 }
                 Text(d.time.date, fontSize = m.sp(11f), letterSpacing = 3.sp, color = d.theme.textSecondary, maxLines = 1)
                 FaceChimeLine(d, m)
-                FaceCityList(d, m, columns = if (wide) 1 else 2)
+                // Names are long, so phones get one column in portrait and a short phone landscape gets two.
+                FaceCityList(d, m, columns = if (m.shortLandscape) 2 else if (wide || m.phone) 1 else 2)
             }
         }
 
@@ -316,7 +317,7 @@ internal fun FlipFace(m: LsMetrics, d: FaceData) {
             Text(d.time.date, fontSize = m.sp(13f), letterSpacing = 5.sp, color = d.theme.textSecondary, maxLines = 1)
             FaceChimeLine(d, m, Modifier.align(Alignment.CenterHorizontally))
             // World clocks as small flip cards.
-            val cols = if (m.landscape) 6 else if (m.phone) 2 else 3
+            val cols = if (m.landscape) (if (this@BoxWithConstraints.maxWidth > 700.dp) 7 else 6) else if (m.phone) 2 else 3
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 d.cities.chunked(cols).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -350,7 +351,7 @@ internal fun OrbitFace(m: LsMetrics, d: FaceData) {
     val measurer = rememberTextMeasurer()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > maxHeight * 1.15f
-        val size = if (wide) minOf(maxHeight, maxWidth * 0.58f) else minOf(maxWidth, maxHeight * 0.6f)
+        val size = if (wide) minOf(maxHeight, maxWidth * 0.58f) else minOf(maxWidth, maxHeight * (if (m.phone) 0.44f else 0.6f))
         val th = d.theme
 
         @Composable
@@ -404,7 +405,7 @@ internal fun OrbitFace(m: LsMetrics, d: FaceData) {
                 Orbits()
                 Text(d.time.date, fontSize = m.sp(12f), letterSpacing = 4.sp, color = th.textSecondary, maxLines = 1)
                 FaceChimeLine(d, m)
-                FaceCityList(d, m, columns = 2)
+                FaceCityList(d, m, columns = if (m.phone) 1 else 2)
             }
         }
     }

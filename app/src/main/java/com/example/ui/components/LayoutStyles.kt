@@ -113,7 +113,7 @@ internal class LsMetrics(val w: Dp, val h: Dp) {
     /** Text scale: 1.0 at a 600dp short side, never below 0.85 so phones stay legible. */
     val u: Float = (minOf(w, h).value / 600f).coerceIn(0.85f, 1.5f)
     val cityColumns: Int = when {
-        shortLandscape -> if (w >= 700.dp) 6 else 3
+        shortLandscape -> if (w >= 700.dp) 7 else 3
         landscape -> 6
         phone -> 2
         else -> 3
@@ -749,6 +749,8 @@ fun DashboardClockLayout(
         val hf = when { m.shortLandscape -> 0.30f; m.landscape -> 0.26f; else -> 0.14f }
         val timeSize = lsTimeSize(m, wf, hf)
         val cardPad = if (m.shortLandscape) 12.dp else 20.dp
+        // City cells are short on phones (landscape, or portrait where 4 rows share the card), so drop the offset line.
+        val tight = m.shortLandscape || (m.phone && !m.landscape)
         // City cells: phone portrait has 2 columns; a short phone-landscape card has no room for the offset line.
         val dashColumns = when {
             m.shortLandscape -> 3
@@ -838,13 +840,13 @@ fun DashboardClockLayout(
                                                     Box(Modifier.size(6.dp).clip(CircleShape).background(if (city.night) Color(0xFF8B9BFF) else activeTheme.accentColor))
                                                 }
                                                 Row(verticalAlignment = Alignment.Bottom) {
-                                                    Text(city.time, fontSize = m.sp(if (m.shortLandscape) 18f else 26f), fontFamily = ChronometerDisplayFont,
+                                                    Text(city.time, fontSize = m.sp(if (tight) 19f else 26f), fontFamily = ChronometerDisplayFont,
                                                         color = ink, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
                                                     if (city.ampm.isNotEmpty()) {
                                                         Text(city.ampm, fontSize = m.sp(9f), color = inkSoft, maxLines = 1, modifier = Modifier.padding(start = 3.dp, bottom = 4.dp))
                                                     }
                                                 }
-                                                if (!m.shortLandscape) {
+                                                if (!tight) {
                                                     Text(city.offset, fontSize = m.sp(10f), fontFamily = ChronometerMonoFont, color = inkSoft.copy(alpha = 0.75f), maxLines = 1)
                                                 }
                                             }

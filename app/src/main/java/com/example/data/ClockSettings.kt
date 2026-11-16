@@ -42,6 +42,7 @@ data class ClockSettings(
     val eyeBreakEnabled: Boolean = false,
     val eyeBreakIntervalMinutes: Int = 20, // Configurable 1..180 minute eye break reminder (e.g. 20m, 50m)
     val layoutStyle: String = "BOLD", // "BOLD", "CALM", "DASHBOARD", "CLASSIC" - independent of colour theme
+    val rhythmStripEnabled: Boolean = true, // thin 24h day bar along the bottom of every layout
     val backdropPattern: String = "NONE", // "NONE" or "CAMO" - faint pattern over any theme/layout
     val nightDimMode: String = "AUTO" // "OFF", "AUTO" (dims 10pm-6am), "BEDSIDE" (always very dark)
 )

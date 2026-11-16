@@ -104,7 +104,7 @@ internal fun LcdFace(m: LsMetrics, d: FaceData) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val panelPad = 20.dp
         val timeW = (maxWidth - panelPad * 2) * 0.86f
-        val timeH = minOf(timeW * 0.36f, maxHeight * 0.38f)
+        val timeH = minOf(timeW * 0.36f, maxHeight * (if (m.shortLandscape) 0.30f else 0.38f))
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
             // The "display": an inset panel with the digits.
             Column(
@@ -129,7 +129,7 @@ internal fun LcdFace(m: LsMetrics, d: FaceData) {
                 }
                 Text(d.chime.label, fontSize = m.sp(12f), fontFamily = ChronometerMonoFont, color = th.textSecondary, maxLines = 1)
             }
-            FaceCityList(d, m, columns = if (m.landscape) 2 else 1, mono = true)
+            FaceCityList(d, m, columns = if (m.shortLandscape) 3 else if (m.landscape) 2 else 1, mono = true)
         }
     }
 }
@@ -171,7 +171,7 @@ internal fun ArcFace(m: LsMetrics, d: FaceData) {
             }
             Text(d.time.date, fontSize = m.sp(12f), letterSpacing = 5.sp, color = th.textSecondary, maxLines = 1)
             Text(d.chime.label, fontSize = m.sp(14f), color = th.textPrimary, maxLines = 1)
-            FaceCityList(d, m, columns = if (m.landscape) 3 else 2)
+            FaceCityList(d, m, columns = if (m.shortLandscape) 4 else if (m.landscape) 3 else if (m.phone) 1 else 2)
         }
     }
 }
@@ -258,7 +258,7 @@ internal fun WordsFace(m: LsMetrics, d: FaceData) {
                 }
                 Text(d.time.date, fontSize = m.sp(10f), letterSpacing = 3.sp, color = th.textSecondary, maxLines = 1)
                 Text(d.chime.label, fontSize = m.sp(13f), color = th.textPrimary, maxLines = 1)
-                FaceCityList(d, m, columns = if (wide) 1 else 2)
+                FaceCityList(d, m, columns = if (wide || m.phone) 1 else 2)
             }
         }
 
@@ -284,6 +284,7 @@ internal fun TimelineFace(m: LsMetrics, d: FaceData) {
     val homeZone: ZoneId = d.now.zone
     val dayStart = d.now.toLocalDate().atStartOfDay(homeZone)
     val intervalMin = d.settings.chimeIntervalMinutes.coerceAtLeast(1)
+    val stackChime = m.phone && !m.landscape
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(d.time.hm, fontSize = m.sp(48f), fontWeight = FontWeight.Light, color = th.textPrimary, fontFamily = ChronometerDisplayFont, maxLines = 1)
@@ -291,12 +292,16 @@ internal fun TimelineFace(m: LsMetrics, d: FaceData) {
                 if (d.time.ampm.isNotEmpty()) Text(d.time.ampm, fontSize = m.sp(14f), color = th.accentColor)
                 Text(d.time.date, fontSize = m.sp(10f), letterSpacing = 3.sp, color = th.textSecondary, maxLines = 1)
             }
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(d.chime.label, fontSize = m.sp(15f), fontWeight = FontWeight.SemiBold, color = th.textPrimary, maxLines = 1)
-                Text(d.chime.sub.uppercase(), fontSize = m.sp(9f), letterSpacing = 1.5.sp, color = th.textSecondary, maxLines = 1)
+            if (!stackChime) {
+                Spacer(Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(d.chime.label, fontSize = m.sp(15f), fontWeight = FontWeight.SemiBold, color = th.textPrimary, maxLines = 1)
+                    Text(d.chime.sub.uppercase(), fontSize = m.sp(9f), letterSpacing = 1.5.sp, color = th.textSecondary, maxLines = 1)
+                }
             }
         }
+        // On a narrow phone the chime text has no room beside the clock, so it sits on its own line.
+        if (stackChime) Text(d.chime.label + " · " + d.chime.sub.lowercase(), fontSize = m.sp(12f), color = th.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         // Rows share the remaining height; each is: label column + 24h bar.
         Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             d.cities.forEach { city ->

@@ -129,6 +129,23 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `day strip is on by default and places an alarm at its home-zone minute of day`() {
+        assertTrue(ClockSettings().rhythmStripEnabled)
+        val home = java.time.ZonedDateTime.of(2026, 11, 15, 22, 0, 0, 0, java.time.ZoneId.of("America/Toronto"))
+        // 09:00 in Tokyo on the same instant-day is 19:00 the previous evening in Toronto (UTC-5 vs UTC+9 = 14h).
+        val tokyo = com.example.data.AlarmItem(hour = 9, minute = 0, timezoneId = "Asia/Tokyo")
+        assertEquals(19 * 60, com.example.ui.components.alarmMinuteOfDay(tokyo, home))
+        val local = com.example.data.AlarmItem(hour = 7, minute = 30, timezoneId = "America/Toronto")
+        assertEquals(7 * 60 + 30, com.example.ui.components.alarmMinuteOfDay(local, home))
+    }
+
+    @Test
+    fun `a focus session ends exactly its duration after it starts`() {
+        val s = com.example.ui.components.FocusSession(label = "Write", startMillis = 1_000L, durationMillis = 25 * 60_000L)
+        assertEquals(1_000L + 1_500_000L, s.endMillis)
+    }
+
+    @Test
     fun `night dimming and backdrop have safe defaults and the dim follows the clock`() {
         val defaults = ClockSettings()
         assertEquals("AUTO", defaults.nightDimMode)

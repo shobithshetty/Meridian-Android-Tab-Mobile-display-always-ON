@@ -134,6 +134,20 @@ fun StationTopHeaderBar(
 
     @Composable
     fun HeaderActionIcons(includeSwitch: Boolean) {
+        val launchFocus = LocalFocusLauncher.current
+        IconButton(
+            onClick = launchFocus,
+            modifier = Modifier
+                .size(48.dp)
+                .testTag("open_focus_session_button")
+        ) {
+            Icon(
+                imageVector = Icons.Default.Timer,
+                contentDescription = "Start a focus session",
+                tint = activeTheme.accentColor
+            )
+        }
+
         IconButton(
             onClick = onOpenSyncInspector,
             modifier = Modifier

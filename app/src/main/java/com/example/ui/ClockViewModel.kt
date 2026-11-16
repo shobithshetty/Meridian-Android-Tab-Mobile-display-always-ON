@@ -457,6 +457,45 @@ class ClockViewModel(
         }
     }
 
+    // ---- Focus sessions (in memory only; shown by every layout style through MainActivity overlays) ----
+    private val _focusSession = MutableStateFlow<com.example.ui.components.FocusSession?>(null)
+    val focusSession: StateFlow<com.example.ui.components.FocusSession?> = _focusSession.asStateFlow()
+
+    private val _focusCompletedLabel = MutableStateFlow<String?>(null)
+    val focusCompletedLabel: StateFlow<String?> = _focusCompletedLabel.asStateFlow()
+
+    private var focusJob: Job? = null
+
+    fun startFocusSession(minutes: Int, label: String) {
+        focusJob?.cancel()
+        val session = com.example.ui.components.FocusSession(
+            label = label.trim().ifBlank { "Focus" },
+            startMillis = System.currentTimeMillis(),
+            durationMillis = minutes.coerceIn(1, 240) * 60_000L
+        )
+        _focusCompletedLabel.value = null
+        _focusSession.value = session
+        focusJob = viewModelScope.launch {
+            delay(session.durationMillis)
+            finishFocusSession(completed = true)
+        }
+    }
+
+    /** [completed] = true celebrates (sound + banner); false just cancels the session. */
+    fun finishFocusSession(completed: Boolean) {
+        focusJob?.cancel()
+        val session = _focusSession.value ?: return
+        _focusSession.value = null
+        if (completed) {
+            _focusCompletedLabel.value = session.label
+            if (!isRunningTests) testPlaySound()
+        }
+    }
+
+    fun dismissFocusComplete() {
+        _focusCompletedLabel.value = null
+    }
+
     fun testPlaySound() {
         AudioSynthEngine.playConfiguredAlert(context, settings.value)
         triggerVisualFlash()
@@ -707,6 +746,10 @@ class ClockViewModel(
         persistSettings(settings.value.copy(layoutStyle = style))
     }
 
+    fun updateRhythmStrip(enabled: Boolean) {
+        persistSettings(settings.value.copy(rhythmStripEnabled = enabled))
+    }
+
     fun updateBackdropPattern(pattern: String) {
         persistSettings(settings.value.copy(backdropPattern = pattern))
     }
@@ -838,6 +881,7 @@ class ClockViewModel(
                 put("layoutStyle", s.layoutStyle)
                 put("nightDimMode", s.nightDimMode)
                 put("backdropPattern", s.backdropPattern)
+                put("rhythmStripEnabled", s.rhythmStripEnabled)
             }
             json.put("settings", sJson)
 
@@ -916,7 +960,8 @@ class ClockViewModel(
                         eyeBreakIntervalMinutes = sJson.optInt("eyeBreakIntervalMinutes", current.eyeBreakIntervalMinutes).coerceIn(1, 180),
                         layoutStyle = sJson.optString("layoutStyle", current.layoutStyle),
                         nightDimMode = sJson.optString("nightDimMode", current.nightDimMode),
-                        backdropPattern = sJson.optString("backdropPattern", current.backdropPattern)
+                        backdropPattern = sJson.optString("backdropPattern", current.backdropPattern),
+                        rhythmStripEnabled = sJson.optBoolean("rhythmStripEnabled", current.rhythmStripEnabled)
                     )
                     repository.saveSettings(importedSettings)
                     recalculateNextChimeSchedule(importedSettings)

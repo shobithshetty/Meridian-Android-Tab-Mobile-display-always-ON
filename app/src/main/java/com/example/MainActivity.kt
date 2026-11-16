@@ -174,6 +174,9 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
     var isBackupImportDialogShowing by rememberSaveable { mutableStateOf(false) }
     var isClockSyncDialogShowing by rememberSaveable { mutableStateOf(false) }
     var isBreathingDialogShowing by rememberSaveable { mutableStateOf(false) }
+    var isFocusDialogShowing by rememberSaveable { mutableStateOf(false) }
+    val focusSession by viewModel.focusSession.collectAsState()
+    val focusCompletedLabel by viewModel.focusCompletedLabel.collectAsState()
 
     var pendingCrashLog by remember { mutableStateOf(com.example.util.CrashReportManager.getLastCrashReport(context)) }
 
@@ -187,6 +190,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
         isBackupImportDialogShowing ||
         isClockSyncDialogShowing ||
         isBreathingDialogShowing ||
+        isFocusDialogShowing ||
         activeEyeBreakPrompt != null ||
         pendingCrashLog != null
 
@@ -195,6 +199,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
             pendingCrashLog != null -> pendingCrashLog = null
             activeEyeBreakPrompt != null -> viewModel.dismissEyeBreakPrompt()
             isBreathingDialogShowing -> isBreathingDialogShowing = false
+            isFocusDialogShowing -> isFocusDialogShowing = false
             isClockSyncDialogShowing -> isClockSyncDialogShowing = false
             isSettingsHubShowing -> {
                 viewModel.setCircadianPreviewHour(null)
@@ -208,6 +213,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
         }
     }
 
+    CompositionLocalProvider(LocalFocusLauncher provides { isFocusDialogShowing = true }) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = activeTheme.bgStart
@@ -365,7 +371,45 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 )
             }
 
+            // Day strip along the bottom edge of every layout style (not dimmed away: it is thin and informative).
+            if (settings.rhythmStripEnabled) {
+                RhythmStrip(
+                    now = currentLocalTime, alarms = alarms, focus = focusSession, theme = activeTheme,
+                    modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 16.dp, vertical = 2.dp)
+                )
+            }
+
+            // Focus session: running bar and completion banner sit above every layout style (and above the dim).
+            focusSession?.let { fs ->
+                FocusSessionPill(
+                    session = fs,
+                    nowMillis = currentLocalTime.toInstant().toEpochMilli(),
+                    theme = activeTheme,
+                    onDone = { viewModel.finishFocusSession(completed = true) },
+                    onStop = { viewModel.finishFocusSession(completed = false) },
+                    modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 6.dp)
+                )
+            }
+            focusCompletedLabel?.let { done ->
+                FocusCompleteBanner(
+                    label = done, theme = activeTheme, onDismiss = { viewModel.dismissFocusComplete() },
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+
             // Modal Scrim Overlays
+            if (isFocusDialogShowing) {
+                ModalScrimBox(onDismiss = { isFocusDialogShowing = false }) {
+                    FocusSessionDialog(
+                        theme = activeTheme,
+                        onDismiss = { isFocusDialogShowing = false },
+                        onStart = { minutes, label ->
+                            viewModel.startFocusSession(minutes, label)
+                            isFocusDialogShowing = false
+                        }
+                    )
+                }
+            }
             if (isAddingFriendDialogShowing) {
                 ModalScrimBox(onDismiss = { isAddingFriendDialogShowing = false }) {
                     AddFriendClockDialog(
@@ -535,6 +579,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 pulseGeneration = pulseTriggerCount
             )
         }
+    }
     }
 }
 
