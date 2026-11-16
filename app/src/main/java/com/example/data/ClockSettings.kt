@@ -44,5 +44,18 @@ data class ClockSettings(
     val layoutStyle: String = "BOLD", // "BOLD", "CALM", "DASHBOARD", "CLASSIC" - independent of colour theme
     val rhythmStripEnabled: Boolean = true, // thin 24h day bar along the bottom of every layout
     val backdropPattern: String = "NONE", // "NONE" or "CAMO" - faint pattern over any theme/layout
-    val nightDimMode: String = "AUTO" // "OFF", "AUTO" (dims 10pm-6am), "BEDSIDE" (always very dark)
+    val nightDimMode: String = "AUTO", // "OFF", "AUTO" (dims 10pm-6am), "SUN" (sunset to sunrise), "BEDSIDE" (always very dark)
+    val alarmStyle: String = "GENTLE", // "GENTLE" = fades in and repeats until dismissed/snoozed; "SINGLE" = one chime
+    val autoBackupUri: String = "", // persisted folder (SAF tree) for daily backups; "" = off. Never exported in a backup.
+    val lastAutoBackupEpochDay: Long = -1L,
+    val countdownsJson: String = "[]", // see PlannerCodec
+    val routinesJson: String = "[]", // see PlannerCodec
+    val holidayRegion: String = "AUTO", // "AUTO", "US", "CA", "GB", "IN" or "OFF"
+    val showDayInfo: Boolean = true, // week number + holiday chip
+    val transitionWarningsEnabled: Boolean = true, // "10 / 5 min left" heads-up before a focus block or alarm ends
+    val keepAwakeMode: String = "ALWAYS", // "ALWAYS" keeps the screen on; "CHARGING" only while plugged in
+    val autoStartOnBoot: Boolean = false, // reopen Meridian after the device restarts
+    val hasHomeLocation: Boolean = false, // true once a coarse location was saved for sunrise/sunset
+    val homeLatitude: Double = 0.0,
+    val homeLongitude: Double = 0.0
 )

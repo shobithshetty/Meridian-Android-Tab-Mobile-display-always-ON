@@ -159,6 +159,240 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `sun times match known London values and handle polar day and night`() {
+        val lat = 51.5074
+        val lon = -0.1278
+        val june = com.example.util.SunTimes.compute(java.time.LocalDate.of(2024, 6, 21), lat, lon)
+        fun minutes(i: java.time.Instant) = i.atZone(java.time.ZoneOffset.UTC).let { it.hour * 60 + it.minute }
+        // Published values: sunrise 03:43 UTC, sunset 20:21 UTC. Allow 10 minutes for the simple formula.
+        assertTrue(kotlin.math.abs(minutes(june.sunrise!!) - (3 * 60 + 43)) <= 10)
+        assertTrue(kotlin.math.abs(minutes(june.sunset!!) - (20 * 60 + 21)) <= 10)
+        val december = com.example.util.SunTimes.compute(java.time.LocalDate.of(2024, 12, 21), lat, lon)
+        assertTrue(kotlin.math.abs(minutes(december.sunrise!!) - (8 * 60 + 4)) <= 10)
+        assertTrue(kotlin.math.abs(minutes(december.sunset!!) - (15 * 60 + 53)) <= 10)
+
+        fun at(h: Int, m: Int = 0) = java.time.LocalDateTime.of(2024, 6, 21, h, m).toInstant(java.time.ZoneOffset.UTC)
+        assertFalse(com.example.util.SunTimes.isDarkAt(at(12), lat, lon))
+        assertTrue(com.example.util.SunTimes.isDarkAt(at(23), lat, lon))
+        assertTrue(com.example.util.SunTimes.isDarkAt(at(2), lat, lon))
+
+        val midnightSun = com.example.util.SunTimes.compute(java.time.LocalDate.of(2024, 6, 21), 69.65, 18.96)
+        assertTrue(midnightSun.sunrise == null && midnightSun.alwaysUp)
+        val polarNight = com.example.util.SunTimes.compute(java.time.LocalDate.of(2024, 12, 21), 69.65, 18.96)
+        assertTrue(polarNight.sunrise == null && !polarNight.alwaysUp)
+    }
+
+    @Test
+    fun `sunset dimming falls back to the fixed hours without a location and keep awake honours charging`() {
+        val dim = com.example.ui.components.NightDim
+        assertTrue(dim.scrimAlpha(dim.SUN, 23, null) > 0f)
+        assertEquals(0f, dim.scrimAlpha(dim.SUN, 12, null))
+        assertEquals(0f, dim.scrimAlpha(dim.SUN, 23, false))
+        assertTrue(dim.scrimAlpha(dim.SUN, 12, true) > 0f)
+        val keep = com.example.ui.components.KeepAwake
+        assertTrue(keep.shouldHold(keep.ALWAYS, charging = false))
+        assertFalse(keep.shouldHold(keep.CHARGING, charging = false))
+        assertTrue(keep.shouldHold(keep.CHARGING, charging = true))
+        assertEquals("ALWAYS", ClockSettings().keepAwakeMode)
+        assertFalse(ClockSettings().autoStartOnBoot)
+    }
+
+    @Test
+    fun `pomodoro cycles through work and breaks and ends after the last round`() {
+        val cycle = com.example.ui.components.FocusCycle
+        val phase = com.example.ui.components.FocusPhase.entries.associateBy { it.name }.let { m ->
+            object { val WORK = m.getValue("WORK"); val BREAK = m.getValue("BREAK") }
+        }
+        var s: com.example.ui.components.FocusSession? = com.example.ui.components.FocusSession(
+            label = "Write", startMillis = 0L, durationMillis = 25 * 60_000L, rounds = 4, workMillis = 25 * 60_000L
+        )
+        val seen = mutableListOf<Pair<com.example.ui.components.FocusPhase, Long>>()
+        var guard = 0
+        while (s != null && guard++ < 20) {
+            seen += s.phase to s.durationMillis / 60_000L
+            s = cycle.next(s, 0L)
+        }
+        // work 25, break 5, work 25, break 5, work 25, break 5, work 25 (last round: no break after it)
+        assertEquals(7, seen.size)
+        assertEquals(phase.WORK to 25L, seen[0])
+        assertEquals(phase.BREAK to 5L, seen[1])
+        assertEquals(phase.WORK to 25L, seen.last())
+        // A single session has nothing after it.
+        val single = com.example.ui.components.FocusSession("x", 0L, 60_000L)
+        assertEquals(null, cycle.next(single, 0L))
+        // The break after the 4th round of a 6-round cycle is the long one.
+        val fourth = com.example.ui.components.FocusSession("x", 0L, 60_000L, round = 4, rounds = 6, workMillis = 60_000L)
+        assertEquals(15L, cycle.next(fourth, 0L)!!.durationMillis / 60_000L)
+        assertEquals("Break 2/4", cycle.pillLabel(com.example.ui.components.FocusSession("x", 0L, 1L, phase.BREAK, 2, 4)))
+    }
+
+    @Test
+    fun `transition warnings fire at 10 and 5 minutes but not for blocks too short to need them`() {
+        val tw = com.example.ui.components.TransitionWarning
+        assertEquals(10, tw.thresholdReached(10 * 60_000L, 25 * 60_000L))
+        assertEquals(10, tw.thresholdReached(9 * 60_000L + 30_000L, 25 * 60_000L))
+        assertEquals(5, tw.thresholdReached(4 * 60_000L + 1_000L, 25 * 60_000L))
+        assertEquals(null, tw.thresholdReached(7 * 60_000L, 25 * 60_000L))
+        // A 5-minute break must not warn "5 min left" the moment it starts.
+        assertEquals(null, tw.thresholdReached(5 * 60_000L, 5 * 60_000L))
+        assertEquals(null, tw.thresholdReached(0L, 25 * 60_000L))
+        val now = java.time.ZonedDateTime.of(2026, 11, 16, 9, 0, 0, 0, java.time.ZoneId.of("UTC"))
+        val alarm = com.example.data.AlarmItem(hour = 9, minute = 10, timezoneId = "UTC")
+        assertEquals(10 * 60_000L, tw.millisUntil(alarm, now))
+        assertEquals(null, tw.millisUntil(alarm.copy(isEnabled = false), now))
+        // Already passed today means tomorrow.
+        assertEquals(23 * 3_600_000L + 50 * 60_000L, tw.millisUntil(alarm.copy(hour = 8, minute = 50), now))
+    }
+
+    @Test
+    fun `countdowns describe time left, shrink in the last three hours and hide when over`() {
+        val zone = java.time.ZoneId.of("UTC")
+        val now = java.time.ZonedDateTime.of(2026, 11, 16, 12, 0, 0, 0, zone)
+        val today = now.toLocalDate().toEpochDay()
+        fun timed(h: Int, m: Int, dayOffset: Long = 0) = com.example.data.Countdown(1, "x", today + dayOffset, h * 60 + m)
+        assertEquals("12 min", timed(12, 12).describe(now))
+        assertEquals("1h 20m", timed(13, 20).describe(now))
+        assertEquals("2h", timed(14, 0).describe(now))
+        assertEquals("21h", timed(9, 0, 1).describe(now)) // under 24h away, so hours, not "tomorrow"
+        assertEquals("tomorrow", timed(15, 0, 1).describe(now))
+        assertEquals("5 days", timed(9, 0, 5).describe(now))
+        val allDay = com.example.data.Countdown(2, "Trip", today + 12, -1)
+        assertEquals("12 days", allDay.describe(now))
+        assertEquals("today", allDay.copy(epochDay = today).describe(now))
+        assertTrue(allDay.isUpcoming(now) && !allDay.copy(epochDay = today - 1).isUpcoming(now))
+        // Bar: full at 3h out, half at 1.5h, none beyond 3h or for all-day.
+        assertEquals(0.5f, timed(13, 30).barFraction(now)!!, 0.001f)
+        assertEquals(null, timed(16, 0).barFraction(now))
+        assertEquals(null, allDay.barFraction(now))
+        // A timed event stays for 5 minutes after it starts, then goes.
+        assertTrue(timed(11, 57).isUpcoming(now))
+        assertTrue(!timed(11, 50).isUpcoming(now))
+    }
+
+    @Test
+    fun `routine items are due after their time until ticked, then return the next day`() {
+        val zone = java.time.ZoneId.of("UTC")
+        val morning = java.time.ZonedDateTime.of(2026, 11, 16, 7, 0, 0, 0, zone)
+        val noon = morning.withHour(12)
+        val today = morning.toLocalDate().toEpochDay()
+        val meds = com.example.data.Routine(1, "Meds", 8 * 60)
+        assertTrue(!meds.isDue(morning))
+        assertTrue(meds.isDue(noon))
+        assertTrue(!meds.copy(doneEpochDay = today).isDue(noon))
+        assertTrue(meds.copy(doneEpochDay = today).isDue(noon.plusDays(1)))
+    }
+
+    @Test
+    fun `holidays follow the rules for each region and week numbers are iso`() {
+        val h = com.example.util.Holidays
+        fun d(y: Int, m: Int, day: Int) = java.time.LocalDate.of(y, m, day)
+        assertEquals(d(2026, 4, 5), h.easterSunday(2026))
+        assertEquals(d(2025, 4, 20), h.easterSunday(2025))
+        assertEquals("Good Friday", h.nameOn(d(2026, 4, 3), "CA"))
+        assertEquals("Easter Monday", h.nameOn(d(2026, 4, 6), "GB"))
+        assertEquals("Remembrance Day", h.nameOn(d(2026, 11, 11), "CA"))
+        assertEquals("Thanksgiving", h.nameOn(d(2026, 10, 12), "CA")) // 2nd Monday of October
+        assertEquals("Thanksgiving", h.nameOn(d(2026, 11, 26), "US")) // 4th Thursday of November
+        assertEquals("Victoria Day", h.nameOn(d(2026, 5, 18), "CA"))
+        assertEquals("Memorial Day", h.nameOn(d(2026, 5, 25), "US"))
+        assertEquals("Spring bank holiday", h.nameOn(d(2026, 5, 25), "GB"))
+        assertEquals("Republic Day", h.nameOn(d(2026, 1, 26), "IN"))
+        assertEquals(null, h.nameOn(d(2026, 11, 16), "CA"))
+        assertEquals(null, h.nameOn(d(2026, 12, 25), null))
+        assertEquals(47, h.isoWeek(d(2026, 11, 16)))
+        assertEquals("CA", h.resolveRegion("AUTO", "ca"))
+        assertEquals(null, h.resolveRegion("AUTO", "FR"))
+        assertEquals(null, h.resolveRegion("OFF", "CA"))
+        assertEquals("US", h.resolveRegion("US", "CA"))
+    }
+
+    @Test
+    fun `planner items survive json and a damaged value never crashes`() {
+        val codec = com.example.data.PlannerCodec
+        val counts = listOf(com.example.data.Countdown(1, "Trip \"North\"", 20000, -1), com.example.data.Countdown(2, "Call", 20001, 930))
+        assertEquals(counts, codec.countdownsFromJson(codec.countdownsToJson(counts)))
+        val routines = listOf(com.example.data.Routine(3, "Meds", 480, 20000))
+        assertEquals(routines, codec.routinesFromJson(codec.routinesToJson(routines)))
+        assertEquals(emptyList<com.example.data.Countdown>(), codec.countdownsFromJson("not json"))
+        assertEquals(emptyList<com.example.data.Routine>(), codec.routinesFromJson("{\"oops\":1}"))
+        val dock = com.example.ui.components.buildDockContent(
+            ClockSettings(countdownsJson = "garbage", showDayInfo = false), java.time.ZonedDateTime.now(), "CA"
+        )
+        assertTrue(dock.isEmpty)
+        // Small phones hide the plain week chip so an empty dock takes no height; a holiday still shows.
+        val ordinary = java.time.ZonedDateTime.of(2026, 11, 16, 12, 0, 0, 0, java.time.ZoneId.of("UTC"))
+        val holiday = java.time.ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, java.time.ZoneId.of("UTC"))
+        assertTrue(com.example.ui.components.buildDockContent(ClockSettings(), ordinary, "CA", plainWeek = false).isEmpty)
+        assertEquals("Wk 47", com.example.ui.components.buildDockContent(ClockSettings(), ordinary, "CA", plainWeek = true).dayInfo)
+        assertEquals("Wk 46 · Remembrance Day", com.example.ui.components.buildDockContent(ClockSettings(), holiday, "CA", plainWeek = false).dayInfo)
+    }
+
+    @Test
+    fun `gentle alarm volume ramps from quiet to full and defaults are safe`() {
+        val ramp = com.example.ui.components.AlarmRamp
+        assertEquals(ramp.START_VOLUME, ramp.volumeAt(0), 0.0001f)
+        assertEquals(1f, ramp.volumeAt(ramp.RAMP_MS), 0.0001f)
+        assertEquals(1f, ramp.volumeAt(ramp.RAMP_MS * 5), 0.0001f)
+        val half = ramp.volumeAt(ramp.RAMP_MS / 2)
+        assertTrue(half > ramp.START_VOLUME && half < 1f)
+        assertTrue(ramp.volumeAt(-1000) >= ramp.START_VOLUME) // a clock step backwards must not go quieter than the start
+        assertEquals("GENTLE", ClockSettings().alarmStyle)
+        assertEquals("", ClockSettings().autoBackupUri) // off until the user picks a folder
+    }
+
+    @Test
+    fun `sleep timer fades out over the last seconds only`() {
+        val t = com.example.ui.components.SleepTimer
+        assertEquals(1f, t.fadeFactor(10 * 60_000L), 0.0001f)
+        assertEquals(1f, t.fadeFactor(t.FADE_MS), 0.0001f)
+        assertEquals(0.5f, t.fadeFactor(t.FADE_MS / 2), 0.0001f)
+        assertEquals(0f, t.fadeFactor(0), 0.0001f)
+        assertEquals(0f, t.fadeFactor(-5), 0.0001f)
+        assertEquals("12m", t.remainingText(11 * 60_000L + 1L))
+        assertEquals("No timer", t.label(null))
+    }
+
+    @Test
+    fun `automatic backup runs once a day after 3am and keeps only the newest seven`() {
+        val b = com.example.util.AutoBackup
+        val zone = java.time.ZoneId.of("UTC")
+        fun at(h: Int, day: Int = 16) = java.time.ZonedDateTime.of(2026, 11, day, h, 0, 0, 0, zone)
+        val today = at(9).toLocalDate().toEpochDay()
+        assertTrue(!b.isDue("", -1, at(9)))                // no folder chosen
+        assertTrue(b.isDue("content://x", -1, at(9)))      // never backed up
+        assertTrue(!b.isDue("content://x", today, at(9)))  // already done today
+        assertTrue(!b.isDue("content://x", today - 1, at(2))) // before 3am: wait
+        assertTrue(b.isDue("content://x", today - 1, at(3)))
+        assertEquals("meridian-backup-2026-11-16.json", b.fileName(java.time.LocalDate.of(2026, 11, 16)))
+        val names = (1..10).map { b.fileName(java.time.LocalDate.of(2026, 11, it)) } + listOf("notes.txt", "meridian-backup-x.json")
+        val doomed = b.namesToDelete(names)
+        assertEquals(3, doomed.size)
+        assertEquals(setOf("meridian-backup-2026-11-01.json", "meridian-backup-2026-11-02.json", "meridian-backup-2026-11-03.json"), doomed.toSet())
+        assertTrue("notes.txt" !in doomed && "meridian-backup-x.json" !in doomed) // never touches the user's other files
+    }
+
+    @Test
+    fun `noise generators stay in range, are repeatable and tilt from bright to deep`() {
+        val kinds = com.example.audio.AmbientKind.entries
+        fun sample(kind: com.example.audio.AmbientKind, seed: Long = 7L) =
+            ShortArray(44_100).also { com.example.audio.NoiseSource(kind, seed).fill(it) }
+        fun crossings(s: ShortArray) = (1 until s.size).count { (s[it] >= 0) != (s[it - 1] >= 0) }.toDouble() / s.size
+        fun rms(s: ShortArray) = kotlin.math.sqrt(s.sumOf { it.toDouble() * it } / s.size) / Short.MAX_VALUE
+        kinds.forEach { k ->
+            val s = sample(k)
+            assertTrue("$k has sound", rms(s) > 0.02)
+            assertTrue("$k is not too loud", rms(s) < 0.6)
+            assertTrue("$k repeatable", s.contentEquals(sample(k)))
+        }
+        // More zero crossings means brighter sound: white > pink > brown.
+        val white = crossings(sample(com.example.audio.AmbientKind.WHITE))
+        val pink = crossings(sample(com.example.audio.AmbientKind.PINK))
+        val brown = crossings(sample(com.example.audio.AmbientKind.BROWN))
+        assertTrue("white=$white pink=$pink brown=$brown", white > pink && pink > brown)
+        assertEquals(com.example.audio.AmbientKind.PINK, com.example.audio.AmbientKind.fromId("nonsense"))
+    }
+
+    @Test
     fun `custom theme studio resolves independent background, text, and number colors plus hsv hex conversion`() {
         assertEquals(9, AllPresetThemes.size)
         assertTrue(AllPresetThemes.any { it.name == "Aurora" })

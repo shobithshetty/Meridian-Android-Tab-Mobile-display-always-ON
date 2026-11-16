@@ -175,6 +175,9 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
     var isClockSyncDialogShowing by rememberSaveable { mutableStateOf(false) }
     var isBreathingDialogShowing by rememberSaveable { mutableStateOf(false) }
     var isFocusDialogShowing by rememberSaveable { mutableStateOf(false) }
+    var isAmbientDialogShowing by rememberSaveable { mutableStateOf(false) }
+    val ringingAlarm by viewModel.ringingAlarm.collectAsState()
+    val ambient by viewModel.ambient.collectAsState()
     val focusSession by viewModel.focusSession.collectAsState()
     val focusCompletedLabel by viewModel.focusCompletedLabel.collectAsState()
 
@@ -191,6 +194,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
         isClockSyncDialogShowing ||
         isBreathingDialogShowing ||
         isFocusDialogShowing ||
+        isAmbientDialogShowing ||
         activeEyeBreakPrompt != null ||
         pendingCrashLog != null
 
@@ -200,6 +204,7 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
             activeEyeBreakPrompt != null -> viewModel.dismissEyeBreakPrompt()
             isBreathingDialogShowing -> isBreathingDialogShowing = false
             isFocusDialogShowing -> isFocusDialogShowing = false
+            isAmbientDialogShowing -> isAmbientDialogShowing = false
             isClockSyncDialogShowing -> isClockSyncDialogShowing = false
             isSettingsHubShowing -> {
                 viewModel.setCircadianPreviewHour(null)
@@ -213,7 +218,10 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
         }
     }
 
-    CompositionLocalProvider(LocalFocusLauncher provides { isFocusDialogShowing = true }) {
+    CompositionLocalProvider(
+        LocalFocusLauncher provides { isFocusDialogShowing = true },
+        LocalAmbientLauncher provides { isAmbientDialogShowing = true }
+    ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = activeTheme.bgStart
@@ -232,6 +240,56 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
             // Every posture (phone/tablet, portrait/landscape) uses the chosen style; only CLASSIC keeps the legacy layouts.
             val usesStyledLayout = settings.layoutStyle != LayoutStyle.CLASSIC
 
+            // Transition warnings: a quiet "10 / 5 min left" pill before a focus block ends or an alarm rings.
+            val nowMillis = currentLocalTime.toInstant().toEpochMilli()
+            val warning: Pair<String, String>? = if (!settings.transitionWarningsEnabled) null else {
+                focusSession?.let { fs ->
+                    TransitionWarning.thresholdReached(fs.endMillis - nowMillis, fs.durationMillis)?.let { m ->
+                        "f-${fs.startMillis}-$m" to "$m min left: ${FocusCycle.pillLabel(fs)}"
+                    }
+                } ?: alarms.firstNotNullOfOrNull { a ->
+                    TransitionWarning.millisUntil(a, currentLocalTime)?.let { left ->
+                        TransitionWarning.thresholdReached(left, null)?.let { m ->
+                            "a-${a.id}-${currentLocalTime.toLocalDate()}-$m" to
+                                "Alarm in $m min" + if (a.label.isNotBlank()) ": ${a.label}" else ""
+                        }
+                    }
+                }
+            }
+            var warningText by remember { mutableStateOf<String?>(null) }
+            val warningsShown = remember { mutableSetOf<String>() }
+            LaunchedEffect(warning?.first) {
+                val w = warning
+                if (w != null && warningsShown.add(w.first)) {
+                    warningText = w.second
+                    kotlinx.coroutines.delay(8_000)
+                    warningText = null
+                }
+            }
+
+            // The layout sits below a row of week/holiday, countdown and routine chips. The row takes real space
+            // (instead of floating over the layout) so it can never cover a header on a narrow phone. It takes no
+            // space at all when there is nothing to show, and leaves room for the focus pill and warning above it.
+            // Small screens are tight on height: a phone only gets the row when there is real news (not just the week
+            // number), and a short landscape screen overlays the chips on its free top centre instead of reserving a row.
+            val ambientChipText = ambient?.let { a ->
+                "♪ ${a.kind.label}" + (a.endsAtMillis?.let { " · ${SleepTimer.remainingText(it - nowMillis)}" } ?: "")
+            }
+            val isPhone = minOf(maxWidth, maxHeight) < 600.dp
+            val overlayDock = posture == AdaptiveScreenPosture.SHORT_LANDSCAPE
+            val dockTopPadding = 6.dp + (if (focusSession != null) 50.dp else 0.dp) + (if (warningText != null) 40.dp else 0.dp)
+            Column(Modifier.fillMaxSize()) {
+                if (!overlayDock) InfoDock(
+                    settings = settings, now = currentLocalTime, theme = activeTheme,
+                    onRoutineDone = { id, day -> viewModel.completeRoutine(id, day) },
+                    ambientText = ambientChipText, onAmbientClick = { isAmbientDialogShowing = true },
+                    plainWeek = !isPhone,
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                        .padding(top = dockTopPadding, bottom = 4.dp, start = 16.dp, end = 16.dp)
+                )
+            // Nested so existing `this@BoxWithConstraints` sizes below describe the area under the chip row.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             if (usesStyledLayout) {
                 when {
                     isWatchFace(settings.layoutStyle) -> WatchFaceLayout(
@@ -357,12 +415,33 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                     onOpenBreathing = { isBreathingDialogShowing = true }
                 )
             } }
+            } // BoxWithConstraints under the chip row
+            } // Column
+
+            if (overlayDock) InfoDock(
+                settings = settings, now = currentLocalTime, theme = activeTheme,
+                onRoutineDone = { id, day -> viewModel.completeRoutine(id, day) },
+                ambientText = ambientChipText, onAmbientClick = { isAmbientDialogShowing = true },
+                plainWeek = false,
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .padding(top = dockTopPadding, start = 16.dp, end = 16.dp)
+            )
 
             // Optional camo backdrop over any theme/layout (low opacity, taps pass through).
             if (settings.backdropPattern == Backdrop.CAMO) CamoOverlay(activeTheme)
 
             // Night dimming: a black scrim over the clock (not over dialogs). It has no pointer handling, so taps pass through.
-            val dimAlpha = NightDim.scrimAlpha(settings.nightDimMode, currentLocalTime.hour)
+            // Always-on clock: hold the screen awake (always, or only while charging, per setting).
+            KeepScreenOnEffect(settings.keepAwakeMode)
+            val sunIsDown = if (settings.nightDimMode == NightDim.SUN && settings.hasHomeLocation) {
+                remember(currentLocalTime.minute, currentLocalTime.hour, settings.homeLatitude, settings.homeLongitude) {
+                    com.example.util.SunTimes.isDarkAt(
+                        currentLocalTime.toInstant(), settings.homeLatitude, settings.homeLongitude
+                    )
+                }
+            } else null
+            val dimAlpha = NightDim.scrimAlpha(settings.nightDimMode, currentLocalTime.hour, sunIsDown)
             if (dimAlpha > 0f) {
                 Box(
                     Modifier
@@ -385,9 +464,18 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                     session = fs,
                     nowMillis = currentLocalTime.toInstant().toEpochMilli(),
                     theme = activeTheme,
-                    onDone = { viewModel.finishFocusSession(completed = true) },
+                    onDone = { viewModel.advanceFocus() },
                     onStop = { viewModel.finishFocusSession(completed = false) },
                     modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 6.dp)
+                )
+            }
+
+            // Transition warning pill (state is computed above the layout so the chip row can make room for it).
+            warningText?.let { text ->
+                TransitionWarningBanner(
+                    text = text, theme = activeTheme,
+                    modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(top = if (focusSession != null) 56.dp else 6.dp)
                 )
             }
             focusCompletedLabel?.let { done ->
@@ -397,14 +485,36 @@ fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
                 )
             }
 
+            // A ringing alarm sits above everything else so it can always be snoozed or dismissed.
+            ringingAlarm?.let { ringing ->
+                AlarmRingingBanner(
+                    alarm = ringing, theme = activeTheme,
+                    onSnooze = { viewModel.snoozeAlarm() }, onDismiss = { viewModel.dismissAlarm() },
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+
             // Modal Scrim Overlays
+            if (isAmbientDialogShowing) {
+                ModalScrimBox(onDismiss = { isAmbientDialogShowing = false }) {
+                    AmbientDialog(
+                        theme = activeTheme, current = ambient, nowMillis = nowMillis,
+                        onDismiss = { isAmbientDialogShowing = false },
+                        onStop = { viewModel.stopAmbient(); isAmbientDialogShowing = false },
+                        onStart = { kind, volume, minutes ->
+                            viewModel.startAmbient(kind, volume, minutes)
+                            isAmbientDialogShowing = false
+                        }
+                    )
+                }
+            }
             if (isFocusDialogShowing) {
                 ModalScrimBox(onDismiss = { isFocusDialogShowing = false }) {
                     FocusSessionDialog(
                         theme = activeTheme,
                         onDismiss = { isFocusDialogShowing = false },
-                        onStart = { minutes, label ->
-                            viewModel.startFocusSession(minutes, label)
+                        onStart = { minutes, label, rounds ->
+                            viewModel.startFocusSession(minutes, label, rounds)
                             isFocusDialogShowing = false
                         }
                     )

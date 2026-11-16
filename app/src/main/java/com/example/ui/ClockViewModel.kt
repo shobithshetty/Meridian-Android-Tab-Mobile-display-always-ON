@@ -277,6 +277,7 @@ class ClockViewModel(
                 checkAndTriggerChime(now)
                 checkAndTriggerEyeBreak(now)
                 checkAndTriggerAlarms(now)
+                checkAndRunAutoBackup(now)
 
                 if (isRunningTests) {
                     delay(10_000)
@@ -303,9 +304,13 @@ class ClockViewModel(
                 val lastFired = lastFiredAlarms[alarm.id] ?: 0L
                 if (currentTimeMillis - lastFired > 60_000) {
                     lastFiredAlarms[alarm.id] = currentTimeMillis
-                    AudioSynthEngine.playConfiguredAlert(context, settings.value)
-                    if (settings.value.flashScreenEnabled) {
-                        triggerVisualFlash()
+                    if (settings.value.alarmStyle == com.example.ui.components.AlarmStyle.GENTLE) {
+                        startRinging(alarm.label.ifBlank { "Alarm" }, snoozes = 0)
+                    } else {
+                        AudioSynthEngine.playConfiguredAlert(context, settings.value)
+                        if (settings.value.flashScreenEnabled) {
+                            triggerVisualFlash()
+                        }
                     }
                 }
             }
@@ -457,6 +462,116 @@ class ClockViewModel(
         }
     }
 
+    // ---- Gentle alarms: fade in, repeat until answered, snooze or dismiss (in memory; overlay shown by MainActivity) ----
+    private val _ringingAlarm = MutableStateFlow<com.example.ui.components.RingingAlarm?>(null)
+    val ringingAlarm: StateFlow<com.example.ui.components.RingingAlarm?> = _ringingAlarm.asStateFlow()
+    private var ringJob: Job? = null
+    private var snoozeJob: Job? = null
+
+    private fun startRinging(label: String, snoozes: Int) {
+        ringJob?.cancel()
+        snoozeJob?.cancel()
+        _ringingAlarm.value = com.example.ui.components.RingingAlarm(label, snoozes)
+        if (settings.value.flashScreenEnabled) triggerVisualFlash()
+        ringJob = viewModelScope.launch {
+            val started = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - started
+                if (elapsed > com.example.ui.components.AlarmRamp.GIVE_UP_MS) {
+                    dismissAlarm() // nobody answered: stop rather than ring forever
+                    break
+                }
+                AudioSynthEngine.playConfiguredAlert(
+                    context, settings.value, com.example.ui.components.AlarmRamp.volumeAt(elapsed)
+                )
+                delay(com.example.ui.components.AlarmRamp.REPEAT_MS)
+            }
+        }
+    }
+
+    fun dismissAlarm() {
+        ringJob?.cancel()
+        snoozeJob?.cancel()
+        _ringingAlarm.value = null
+        AudioSynthEngine.stopActivePlayback()
+    }
+
+    /** Silences the alarm now and rings again after [minutes]. */
+    fun snoozeAlarm(minutes: Int = com.example.ui.components.AlarmRamp.SNOOZE_MINUTES) {
+        val ringing = _ringingAlarm.value ?: return
+        ringJob?.cancel()
+        AudioSynthEngine.stopActivePlayback()
+        _ringingAlarm.value = null
+        snoozeJob = viewModelScope.launch {
+            delay(minutes.coerceIn(1, 30) * 60_000L)
+            startRinging(ringing.label, ringing.snoozes + 1)
+        }
+    }
+
+    // ---- Background sound with sleep timer (in memory; the sound stops when the app closes) ----
+    private val _ambient = MutableStateFlow<com.example.ui.components.AmbientState?>(null)
+    val ambient: StateFlow<com.example.ui.components.AmbientState?> = _ambient.asStateFlow()
+    private var ambientJob: Job? = null
+
+    fun startAmbient(kind: com.example.audio.AmbientKind, volume: Float, minutes: Int?) {
+        ambientJob?.cancel()
+        val endsAt = minutes?.let { System.currentTimeMillis() + it.coerceIn(1, 480) * 60_000L }
+        val state = com.example.ui.components.AmbientState(kind, volume.coerceIn(0.05f, 1f), endsAt)
+        _ambient.value = state
+        com.example.audio.AmbientEngine.start(context, kind, state.volume)
+        if (endsAt != null) {
+            ambientJob = viewModelScope.launch {
+                while (true) {
+                    val remaining = endsAt - System.currentTimeMillis()
+                    if (remaining <= 0) {
+                        stopAmbient()
+                        break
+                    }
+                    com.example.audio.AmbientEngine.setVolume(state.volume * com.example.ui.components.SleepTimer.fadeFactor(remaining))
+                    delay(1_000)
+                }
+            }
+        }
+    }
+
+    fun stopAmbient() {
+        ambientJob?.cancel()
+        _ambient.value = null
+        com.example.audio.AmbientEngine.stop()
+    }
+
+    // ---- Scheduled backup to a folder the user picked ----
+    private var autoBackupRunning = false
+
+    private fun checkAndRunAutoBackup(now: ZonedDateTime) {
+        val s = settings.value
+        if (autoBackupRunning || isRunningTests) return
+        if (!com.example.util.AutoBackup.isDue(s.autoBackupUri, s.lastAutoBackupEpochDay, now)) return
+        runAutoBackup(now)
+    }
+
+    /** Writes a backup into the chosen folder now. Records the day only on success, so a failure is retried later. */
+    fun runAutoBackup(now: ZonedDateTime = ZonedDateTime.now()) {
+        val uri = settings.value.autoBackupUri
+        if (uri.isBlank() || autoBackupRunning) return
+        autoBackupRunning = true
+        val json = exportBackup()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val ok = com.example.util.AutoBackup.write(context, android.net.Uri.parse(uri), now.toLocalDate(), json)
+            autoBackupRunning = false
+            if (ok) persistSettings(settings.value.copy(lastAutoBackupEpochDay = now.toLocalDate().toEpochDay()))
+        }
+    }
+
+    fun setAutoBackupFolder(uri: String) {
+        // New folder: forget the last run so the first backup happens right away (still after the 3am rule).
+        persistSettings(settings.value.copy(autoBackupUri = uri, lastAutoBackupEpochDay = -1L))
+    }
+
+    fun updateAlarmStyle(style: String) {
+        persistSettings(settings.value.copy(alarmStyle = style))
+    }
+
     // ---- Focus sessions (in memory only; shown by every layout style through MainActivity overlays) ----
     private val _focusSession = MutableStateFlow<com.example.ui.components.FocusSession?>(null)
     val focusSession: StateFlow<com.example.ui.components.FocusSession?> = _focusSession.asStateFlow()
@@ -466,18 +581,41 @@ class ClockViewModel(
 
     private var focusJob: Job? = null
 
-    fun startFocusSession(minutes: Int, label: String) {
-        focusJob?.cancel()
-        val session = com.example.ui.components.FocusSession(
-            label = label.trim().ifBlank { "Focus" },
-            startMillis = System.currentTimeMillis(),
-            durationMillis = minutes.coerceIn(1, 240) * 60_000L
-        )
+    fun startFocusSession(minutes: Int, label: String, rounds: Int = 1) {
+        val workMillis = minutes.coerceIn(1, 240) * 60_000L
         _focusCompletedLabel.value = null
+        runFocusPhase(
+            com.example.ui.components.FocusSession(
+                label = label.trim().ifBlank { "Focus" },
+                startMillis = System.currentTimeMillis(),
+                durationMillis = workMillis,
+                rounds = rounds.coerceIn(1, 12),
+                workMillis = workMillis
+            )
+        )
+    }
+
+    private fun runFocusPhase(session: com.example.ui.components.FocusSession) {
+        focusJob?.cancel()
         _focusSession.value = session
         focusJob = viewModelScope.launch {
             delay(session.durationMillis)
+            advanceFocus()
+        }
+    }
+
+    /**
+     * Moves a Pomodoro cycle to its next phase (work to break and back), or finishes the whole session when no
+     * phase is left. Also what the pill's "Done" button does, so it skips ahead instead of just stopping.
+     */
+    fun advanceFocus() {
+        val current = _focusSession.value ?: return
+        val next = com.example.ui.components.FocusCycle.next(current, System.currentTimeMillis())
+        if (next == null) {
             finishFocusSession(completed = true)
+        } else {
+            if (!isRunningTests) testPlaySound()
+            runFocusPhase(next)
         }
     }
 
@@ -758,6 +896,60 @@ class ClockViewModel(
         persistSettings(settings.value.copy(nightDimMode = mode))
     }
 
+    fun updateKeepAwakeMode(mode: String) {
+        persistSettings(settings.value.copy(keepAwakeMode = mode))
+    }
+
+    // ---- Countdowns, routine checklist, date info (stored as JSON inside the settings row) ----
+    fun addCountdown(label: String, epochDay: Long, minuteOfDay: Int) {
+        val list = com.example.data.PlannerCodec.countdownsFromJson(settings.value.countdownsJson)
+        val item = com.example.data.Countdown(System.currentTimeMillis(), label.trim().ifBlank { "Event" }.take(30), epochDay, minuteOfDay)
+        persistSettings(settings.value.copy(countdownsJson = com.example.data.PlannerCodec.countdownsToJson(list + item)))
+    }
+
+    fun removeCountdown(id: Long) {
+        val list = com.example.data.PlannerCodec.countdownsFromJson(settings.value.countdownsJson)
+        persistSettings(settings.value.copy(countdownsJson = com.example.data.PlannerCodec.countdownsToJson(list.filterNot { it.id == id })))
+    }
+
+    fun addRoutine(label: String, minuteOfDay: Int) {
+        val list = com.example.data.PlannerCodec.routinesFromJson(settings.value.routinesJson)
+        val item = com.example.data.Routine(System.currentTimeMillis(), label.trim().ifBlank { "Routine" }.take(30), minuteOfDay)
+        persistSettings(settings.value.copy(routinesJson = com.example.data.PlannerCodec.routinesToJson(list + item)))
+    }
+
+    fun removeRoutine(id: Long) {
+        val list = com.example.data.PlannerCodec.routinesFromJson(settings.value.routinesJson)
+        persistSettings(settings.value.copy(routinesJson = com.example.data.PlannerCodec.routinesToJson(list.filterNot { it.id == id })))
+    }
+
+    /** Ticks a routine off for [epochDay]; it comes back tomorrow at its time. */
+    fun completeRoutine(id: Long, epochDay: Long) {
+        val list = com.example.data.PlannerCodec.routinesFromJson(settings.value.routinesJson)
+        val updated = list.map { if (it.id == id) it.copy(doneEpochDay = epochDay) else it }
+        persistSettings(settings.value.copy(routinesJson = com.example.data.PlannerCodec.routinesToJson(updated)))
+    }
+
+    fun updateHolidayRegion(region: String) {
+        persistSettings(settings.value.copy(holidayRegion = region))
+    }
+
+    fun updateShowDayInfo(enabled: Boolean) {
+        persistSettings(settings.value.copy(showDayInfo = enabled))
+    }
+
+    fun updateTransitionWarnings(enabled: Boolean) {
+        persistSettings(settings.value.copy(transitionWarningsEnabled = enabled))
+    }
+
+    fun updateAutoStartOnBoot(enabled: Boolean) {
+        persistSettings(settings.value.copy(autoStartOnBoot = enabled))
+    }
+
+    fun updateHomeLocation(latitude: Double, longitude: Double) {
+        persistSettings(settings.value.copy(hasHomeLocation = true, homeLatitude = latitude, homeLongitude = longitude))
+    }
+
     fun updateClockSortOrder(order: String) {
         persistSettings(settings.value.copy(clockSortOrder = order), syncWidgets = true)
     }
@@ -882,6 +1074,17 @@ class ClockViewModel(
                 put("nightDimMode", s.nightDimMode)
                 put("backdropPattern", s.backdropPattern)
                 put("rhythmStripEnabled", s.rhythmStripEnabled)
+                put("alarmStyle", s.alarmStyle)
+                put("countdownsJson", s.countdownsJson)
+                put("routinesJson", s.routinesJson)
+                put("holidayRegion", s.holidayRegion)
+                put("showDayInfo", s.showDayInfo)
+                put("transitionWarningsEnabled", s.transitionWarningsEnabled)
+                put("keepAwakeMode", s.keepAwakeMode)
+                put("autoStartOnBoot", s.autoStartOnBoot)
+                put("hasHomeLocation", s.hasHomeLocation)
+                put("homeLatitude", s.homeLatitude)
+                put("homeLongitude", s.homeLongitude)
             }
             json.put("settings", sJson)
 
@@ -961,7 +1164,18 @@ class ClockViewModel(
                         layoutStyle = sJson.optString("layoutStyle", current.layoutStyle),
                         nightDimMode = sJson.optString("nightDimMode", current.nightDimMode),
                         backdropPattern = sJson.optString("backdropPattern", current.backdropPattern),
-                        rhythmStripEnabled = sJson.optBoolean("rhythmStripEnabled", current.rhythmStripEnabled)
+                        rhythmStripEnabled = sJson.optBoolean("rhythmStripEnabled", current.rhythmStripEnabled),
+                        alarmStyle = sJson.optString("alarmStyle", current.alarmStyle),
+                        countdownsJson = sJson.optString("countdownsJson", current.countdownsJson),
+                        routinesJson = sJson.optString("routinesJson", current.routinesJson),
+                        holidayRegion = sJson.optString("holidayRegion", current.holidayRegion),
+                        showDayInfo = sJson.optBoolean("showDayInfo", current.showDayInfo),
+                        transitionWarningsEnabled = sJson.optBoolean("transitionWarningsEnabled", current.transitionWarningsEnabled),
+                        keepAwakeMode = sJson.optString("keepAwakeMode", current.keepAwakeMode),
+                        autoStartOnBoot = sJson.optBoolean("autoStartOnBoot", current.autoStartOnBoot),
+                        hasHomeLocation = sJson.optBoolean("hasHomeLocation", current.hasHomeLocation),
+                        homeLatitude = sJson.optDouble("homeLatitude", current.homeLatitude),
+                        homeLongitude = sJson.optDouble("homeLongitude", current.homeLongitude)
                     )
                     repository.saveSettings(importedSettings)
                     recalculateNextChimeSchedule(importedSettings)
@@ -1025,6 +1239,7 @@ class ClockViewModel(
         isTimerRunning = false
         tickJob?.cancel()
         AudioSynthEngine.stopActivePlayback()
+        com.example.audio.AmbientEngine.stop()
         if (!isRunningTests) {
             RealtimeClockSyncManager.unregister(context)
         }

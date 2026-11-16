@@ -26,7 +26,15 @@ import com.example.ui.theme.ClockVisualTheme
 import kotlinx.coroutines.delay
 
 /** One timed focus block. Kept in memory only: it is a "right now" tool, not a log. */
-data class FocusSession(val label: String, val startMillis: Long, val durationMillis: Long) {
+data class FocusSession(
+    val label: String,
+    val startMillis: Long,
+    val durationMillis: Long,
+    val phase: FocusPhase = FocusPhase.WORK,
+    val round: Int = 1,
+    val rounds: Int = 1, // 1 = a single session; more turns it into a Pomodoro cycle
+    val workMillis: Long = durationMillis // length of each work round (durationMillis is the current phase)
+) {
     val endMillis: Long get() = startMillis + durationMillis
 }
 
@@ -39,8 +47,13 @@ val LocalFocusLauncher = staticCompositionLocalOf<() -> Unit> { {} }
 private val FocusDurations = listOf(15, 25, 45, 60, 90)
 
 @Composable
-fun FocusSessionDialog(theme: ClockVisualTheme, onDismiss: () -> Unit, onStart: (minutes: Int, label: String) -> Unit) {
+fun FocusSessionDialog(
+    theme: ClockVisualTheme,
+    onDismiss: () -> Unit,
+    onStart: (minutes: Int, label: String, rounds: Int) -> Unit
+) {
     var minutes by remember { mutableIntStateOf(25) }
+    var rounds by remember { mutableIntStateOf(1) }
     var label by remember { mutableStateOf("") }
     Surface(
         shape = RoundedCornerShape(22.dp), color = theme.cardBackground,
@@ -77,10 +90,31 @@ fun FocusSessionDialog(theme: ClockVisualTheme, onDismiss: () -> Unit, onStart: 
                     }
                 }
             }
-            Text("minutes", fontSize = 11.sp, color = theme.textSecondary)
+            Text("minutes per round", fontSize = 11.sp, color = theme.textSecondary)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FocusCycle.roundOptions.forEach { r ->
+                    val selected = r == rounds
+                    Surface(
+                        onClick = { rounds = r }, shape = CircleShape,
+                        color = if (selected) theme.accentColor else theme.textPrimary.copy(alpha = 0.10f),
+                        modifier = Modifier.weight(1f).testTag("focus_rounds_$r")
+                    ) {
+                        Text(
+                            if (r == 1) "Single" else "x$r", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                            color = if (selected) theme.onAccentColor else theme.textPrimary,
+                            modifier = Modifier.padding(vertical = 10.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+            Text(
+                if (rounds == 1) "One block, no breaks."
+                else "Pomodoro: $rounds rounds with ${FocusCycle.SHORT_BREAK_MINUTES}-minute breaks (${FocusCycle.LONG_BREAK_MINUTES} after every ${FocusCycle.LONG_BREAK_EVERY}th).",
+                fontSize = 11.sp, color = theme.textSecondary
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text("Cancel", color = theme.textSecondary) }
-                TextButton(onClick = { onStart(minutes, label) }, modifier = Modifier.testTag("focus_start_button")) {
+                TextButton(onClick = { onStart(minutes, label, rounds) }, modifier = Modifier.testTag("focus_start_button")) {
                     Text("Start", color = theme.accentColor, fontWeight = FontWeight.Bold)
                 }
             }
@@ -111,7 +145,7 @@ fun FocusSessionPill(
             Row(Modifier.padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(theme.accentColor))
                 Text(
-                    session.label, fontSize = 13.sp, color = theme.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    FocusCycle.pillLabel(session), fontSize = 13.sp, color = theme.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 140.dp).padding(start = 8.dp)
                 )
                 Text(
@@ -133,6 +167,20 @@ fun FocusSessionPill(
                 Box(Modifier.fillMaxHeight().fillMaxWidth(((total - remaining).toFloat() / total).coerceIn(0f, 1f)).background(theme.accentColor))
             }
         }
+    }
+}
+
+/** Small heads-up pill such as "5 min left: Write". It has no buttons and no sound, so it never interrupts. */
+@Composable
+fun TransitionWarningBanner(text: String, theme: ClockVisualTheme, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(50), color = theme.bgStart.copy(alpha = 0.92f),
+        border = BorderStroke(1.dp, theme.accentColor.copy(alpha = 0.5f)), modifier = modifier.testTag("transition_warning")
+    ) {
+        Text(
+            text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
     }
 }
 

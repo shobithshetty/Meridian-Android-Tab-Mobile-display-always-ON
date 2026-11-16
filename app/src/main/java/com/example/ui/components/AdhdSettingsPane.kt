@@ -562,8 +562,9 @@ fun AdhdSettingsPane(
                     letterSpacing = 1.sp,
                     color = activeTheme.textSecondary
                 )
+                NightDim.options.chunked(2).forEach { pair ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    NightDim.options.forEach { (id, label, subtitle) ->
+                    pair.forEach { (id, label, subtitle) ->
                         val selected = settings.nightDimMode == id
                         Surface(
                             onClick = { viewModel.updateNightDimMode(id) },
@@ -590,7 +591,12 @@ fun AdhdSettingsPane(
                         }
                     }
                 }
+                }
             }
+
+            AlwaysOnSettingsSection(settings, activeTheme, viewModel)
+            PlannerSettingsSection(settings, activeTheme, viewModel)
+            SoundAndBackupSettingsSection(settings, activeTheme, viewModel)
 
             // 7 Curated Preset Themes Grid (2 per row)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

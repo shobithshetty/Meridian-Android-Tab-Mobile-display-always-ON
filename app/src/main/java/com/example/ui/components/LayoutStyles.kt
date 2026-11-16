@@ -54,18 +54,28 @@ import kotlinx.coroutines.delay
 object NightDim {
     const val OFF = "OFF"
     const val AUTO = "AUTO"
+    const val SUN = "SUN"
     const val BEDSIDE = "BEDSIDE"
 
     val options: List<Triple<String, String, String>> = listOf(
         Triple(OFF, "Off", "Full brightness always"),
         Triple(AUTO, "Auto", "Dims from 10pm to 6am"),
+        Triple(SUN, "Sunset", "Dims from sunset to sunrise"),
         Triple(BEDSIDE, "Bedside", "Very dark all the time")
     )
 
-    /** Scrim opacity (0 = none) for [mode] at the given local [hour]. */
-    fun scrimAlpha(mode: String, hour: Int): Float = when (mode) {
+    /**
+     * Scrim opacity (0 = none) for [mode] at the given local [hour]. For [SUN], [sunIsDown] says whether the sun is
+     * below the horizon; null (no saved location yet) falls back to the fixed 10pm-6am rule.
+     */
+    fun scrimAlpha(mode: String, hour: Int, sunIsDown: Boolean? = null): Float = when (mode) {
         BEDSIDE -> 0.78f
         AUTO -> if (hour >= 22 || hour < 6) 0.5f else 0f
+        SUN -> when (sunIsDown) {
+            null -> if (hour >= 22 || hour < 6) 0.5f else 0f
+            true -> 0.5f
+            false -> 0f
+        }
         else -> 0f
     }
 }

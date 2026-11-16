@@ -148,6 +148,20 @@ fun StationTopHeaderBar(
             )
         }
 
+        val launchAmbient = LocalAmbientLauncher.current
+        IconButton(
+            onClick = launchAmbient,
+            modifier = Modifier
+                .size(48.dp)
+                .testTag("open_ambient_sound_button")
+        ) {
+            Icon(
+                imageVector = Icons.Default.Bedtime,
+                contentDescription = "Background sound and sleep timer",
+                tint = activeTheme.accentColor
+            )
+        }
+
         IconButton(
             onClick = onOpenSyncInspector,
             modifier = Modifier

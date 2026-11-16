@@ -29,6 +29,10 @@ object AudioSynthEngine {
     private var activeRingtone: Ringtone? = null
     private var activeMediaPlayer: MediaPlayer? = null
 
+    /** Loudness (0..1) applied to whatever is played next. Alarms ramp it up; every other caller leaves it at 1. */
+    @Volatile
+    private var outputVolume = 1f
+
     private val isRunningTests: Boolean by lazy {
         try {
             Class.forName("org.robolectric.Robolectric")
@@ -37,6 +41,9 @@ object AudioSynthEngine {
             false
         }
     }
+
+    /** The same attribution-tagged context every sound here uses (Android 11+ tracks it for app-ops). */
+    internal fun attributionContext(context: Context): Context = wrapAttributionContext(context)
 
     private fun wrapAttributionContext(context: Context): Context {
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -97,17 +104,19 @@ object AudioSynthEngine {
      * Plays the user's configured alert sound (Built-in synth, System Ringtone URI, or Custom Audio File URI)
      * with automatic fallback to synthesized chime if a custom URI is revoked or unreadable.
      */
-    fun playConfiguredAlert(context: Context, settings: ClockSettings) {
+    fun playConfiguredAlert(context: Context, settings: ClockSettings, volume: Float = 1f) {
         if (isRunningTests) return
         val attrContext = wrapAttributionContext(context)
         stopActivePlayback()
+        val level = volume.coerceIn(0f, 1f)
+        outputVolume = level
 
         when (settings.soundSourceType) {
             "CUSTOM_FILE" -> {
                 if (settings.customSoundUri.isNotBlank()) {
                     playCustomFileUri(attrContext, settings.customSoundUri, settings.selectedSoundName)
                 } else {
-                    playSound(attrContext, settings.selectedSoundName)
+                    playSound(attrContext, settings.selectedSoundName, level)
                 }
             }
             "RINGTONE" -> {
@@ -118,7 +127,7 @@ object AudioSynthEngine {
                 }
             }
             else -> {
-                playSound(attrContext, settings.selectedSoundName)
+                playSound(attrContext, settings.selectedSoundName, level)
             }
         }
     }
@@ -132,6 +141,7 @@ object AudioSynthEngine {
         if (isRunningTests) return
         val attrContext = wrapAttributionContext(context)
         stopActivePlayback()
+        outputVolume = 1f
         if (sourceType == "CUSTOM_FILE") {
             playCustomFileUri(attrContext, uriString, fallbackBuiltin)
         } else if (sourceType == "RINGTONE") {
@@ -141,10 +151,11 @@ object AudioSynthEngine {
         }
     }
 
-    fun playSound(context: Context, soundName: String) {
+    fun playSound(context: Context, soundName: String, volume: Float = 1f) {
         if (isRunningTests) return
         val attrContext = wrapAttributionContext(context)
         stopActivePlayback()
+        outputVolume = volume.coerceIn(0f, 1f)
 
         if (soundName == "System Accent") {
             playSystemNotification(attrContext)
@@ -204,13 +215,14 @@ object AudioSynthEngine {
                         true
                     }
                     prepare()
+                    setVolume(outputVolume, outputVolume)
                 }
                 synchronized(playbackLock) {
                     activeMediaPlayer = mp
                 }
                 mp.start()
             } catch (_: Throwable) {
-                playSound(context, fallbackName)
+                playSound(context, fallbackName, outputVolume)
             }
         }.start()
     }
@@ -227,12 +239,13 @@ object AudioSynthEngine {
                 synchronized(playbackLock) {
                     activeRingtone = ringtone
                 }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) ringtone.volume = outputVolume
                 ringtone.play()
             } else {
-                playSound(context, fallbackName)
+                playSound(context, fallbackName, outputVolume)
             }
         } catch (_: Throwable) {
-            playSound(context, fallbackName)
+            playSound(context, fallbackName, outputVolume)
         }
     }
 
@@ -356,6 +369,7 @@ object AudioSynthEngine {
                 synchronized(playbackLock) {
                     activeRingtone = ringtone
                 }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) ringtone.volume = outputVolume
                 ringtone.play()
             } else {
                 playSoftBeep(context)
@@ -400,6 +414,7 @@ object AudioSynthEngine {
             }
 
             audioTrack.write(buffer, 0, buffer.size)
+            audioTrack.setVolume(outputVolume)
             audioTrack.play()
 
             val playTimeMs = (buffer.size.toFloat() / SAMPLE_RATE * 1000).toLong() + 200

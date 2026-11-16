@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [FriendClock::class, ClockSettings::class, AlarmItem::class],
-    version = 14,
+    version = 18,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -63,6 +63,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN alarmStyle TEXT NOT NULL DEFAULT 'GENTLE'")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN autoBackupUri TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN lastAutoBackupEpochDay INTEGER NOT NULL DEFAULT -1")
+            }
+        }
+
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN countdownsJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN routinesJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN holidayRegion TEXT NOT NULL DEFAULT 'AUTO'")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN showDayInfo INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN transitionWarningsEnabled INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN keepAwakeMode TEXT NOT NULL DEFAULT 'ALWAYS'")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN autoStartOnBoot INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN hasHomeLocation INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN homeLatitude REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE clock_settings ADD COLUMN homeLongitude REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
         private val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -78,7 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "wallpaper_clock_db"
                 )
-                    .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                     .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance
