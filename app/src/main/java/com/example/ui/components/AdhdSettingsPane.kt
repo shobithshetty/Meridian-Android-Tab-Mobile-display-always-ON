@@ -207,16 +207,7 @@ fun AdhdSettingsPane(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        // 1. PRESET THEMES & CUSTOM COLOR STUDIO
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = stringResource(R.string.theme_studio_title),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = activeTheme.accentColor,
-                letterSpacing = 1.sp
-            )
-
+        SettingsGroup("COLOUR THEME", activeTheme, initiallyOpen = true) {
             // Time-of-Day Circadian Palette Card (Cool Morning -> Warm Evening / Soothing Night)
             val previewHour by viewModel.circadianPreviewHour.collectAsStateWithLifecycle()
             val currentTime by viewModel.currentLocalTime.collectAsStateWithLifecycle()
@@ -423,6 +414,79 @@ fun AdhdSettingsPane(
                 }
             }
 
+            // 7 Curated Preset Themes Grid (2 per row)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AllPresetThemes.chunked(2).forEach { rowPresets ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        rowPresets.forEach { preset ->
+                            val selected = settings.themeName == preset.name
+                            Surface(
+                                onClick = { viewModel.updateWallpaperTheme(preset.name) },
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) activeTheme.accentColor else preset.theme.dividerColor
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 52.dp)
+                                    .testTag("theme_preset_${preset.name.lowercase().replace(' ', '_')}")
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(preset.theme.bgStart, preset.theme.bgEnd)
+                                            )
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = preset.name,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = preset.theme.textPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = preset.subtitle,
+                                                fontSize = 9.sp,
+                                                color = preset.theme.textSecondary,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        Text(
+                                            text = "12:45",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontFamily = ChronometerDisplayFont,
+                                            style = TextStyle(fontFeatureSettings = "tnum"),
+                                            color = preset.theme.numberColor
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        if (rowPresets.size < 2) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        SettingsGroup("LAYOUT & BACKDROP", activeTheme, initiallyOpen = false) {
             // Layout style (independent of colour theme): applies on tablets
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -593,93 +657,27 @@ fun AdhdSettingsPane(
                 }
                 }
             }
-
-            AlwaysOnSettingsSection(settings, activeTheme, viewModel)
-            PlannerSettingsSection(settings, activeTheme, viewModel)
-            SoundAndBackupSettingsSection(settings, activeTheme, viewModel)
-            WeatherSettingsSection(settings, activeTheme, viewModel)
-
-            // 7 Curated Preset Themes Grid (2 per row)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AllPresetThemes.chunked(2).forEach { rowPresets ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        rowPresets.forEach { preset ->
-                            val selected = settings.themeName == preset.name
-                            Surface(
-                                onClick = { viewModel.updateWallpaperTheme(preset.name) },
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(
-                                    width = if (selected) 2.dp else 1.dp,
-                                    color = if (selected) activeTheme.accentColor else preset.theme.dividerColor
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .defaultMinSize(minHeight = 52.dp)
-                                    .testTag("theme_preset_${preset.name.lowercase().replace(' ', '_')}")
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(preset.theme.bgStart, preset.theme.bgEnd)
-                                            )
-                                        )
-                                        .padding(horizontal = 10.dp, vertical = 8.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = preset.name,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = preset.theme.textPrimary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = preset.subtitle,
-                                                fontSize = 9.sp,
-                                                color = preset.theme.textSecondary,
-                                                maxLines = 1
-                                            )
-                                        }
-                                        Text(
-                                            text = "12:45",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontFamily = ChronometerDisplayFont,
-                                            style = TextStyle(fontFeatureSettings = "tnum"),
-                                            color = preset.theme.numberColor
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        if (rowPresets.size < 2) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
         }
 
+        SettingsGroup("ALWAYS-ON SCREEN", activeTheme, initiallyOpen = false) {
+            AlwaysOnSettingsSection(settings, activeTheme, viewModel)
+        }
+
+        SettingsGroup("PLANNER & ROUTINES", activeTheme, initiallyOpen = false) {
+            PlannerSettingsSection(settings, activeTheme, viewModel)
+        }
+
+        SettingsGroup("SOUND & BACKUP", activeTheme, initiallyOpen = false) {
+            SoundAndBackupSettingsSection(settings, activeTheme, viewModel)
+        }
+
+        SettingsGroup("WEATHER", activeTheme, initiallyOpen = false) {
+            WeatherSettingsSection(settings, activeTheme, viewModel)
+        }
+
+
         // 2. 15–20 MINUTE PRECISION INTERVAL & CUSTOM SOUND
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "15–20 MINUTE ALERT INTERVAL",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = activeTheme.accentColor,
-                letterSpacing = 1.sp
-            )
+        SettingsGroup("ALERT INTERVAL & SOUND", activeTheme) {
             IntervalMinuteSelectorSection(
                 currentMinutes = settings.chimeIntervalMinutes,
                 activeTheme = activeTheme,
@@ -694,14 +692,7 @@ fun AdhdSettingsPane(
         }
 
         // 3. WORLD CLOCK WIDGET & HOME SCREEN WIDGET
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "WORLD CLOCK WIDGET CONFIGURATION",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = activeTheme.accentColor,
-                letterSpacing = 1.sp
-            )
+        SettingsGroup("WORLD CLOCKS & WIDGET", activeTheme) {
 
             SettingsRowToggle(
                 title = "Display World Clock Alongside Main Clock",
@@ -740,14 +731,7 @@ fun AdhdSettingsPane(
         }
 
         // 4. SCREEN ORIENTATION LOCK
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "SCREEN ORIENTATION LOCK",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = activeTheme.accentColor,
-                letterSpacing = 1.sp
-            )
+        SettingsGroup("SCREEN ORIENTATION", activeTheme) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -783,14 +767,7 @@ fun AdhdSettingsPane(
         }
 
         // 5. CLOCK, SENSOR & FOCUS TOGGLES
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "CLOCK & FOCUS PREFERENCES",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = activeTheme.accentColor,
-                letterSpacing = 1.sp
-            )
+        SettingsGroup("CLOCK & FOCUS", activeTheme) {
 
             SettingsRowToggle(
                 title = "Display Seconds",
@@ -1364,14 +1341,7 @@ fun AdhdSettingsPane(
         }
 
         // 6. BATTERY RELIABILITY & OFFLINE PORTABILITY
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "RELIABILITY & PORTABILITY",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = activeTheme.accentColor,
-                letterSpacing = 1.sp
-            )
+        SettingsGroup("BATTERY & BACKUP", activeTheme) {
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = activeTheme.cardBackground),
