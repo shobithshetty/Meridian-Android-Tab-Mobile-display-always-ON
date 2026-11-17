@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                 val clockViewModel: ClockViewModel = viewModel(
                     factory = ClockViewModelFactory(repository, LocalContext.current.applicationContext)
                 )
-                WallpaperClockAppScreen(viewModel = clockViewModel)
+                MeridianScreen(viewModel = clockViewModel)
             }
         }
     }
@@ -88,7 +88,7 @@ fun Context.findActivity(): ComponentActivity? {
 }
 
 @Composable
-fun WallpaperClockAppScreen(viewModel: ClockViewModel) {
+fun MeridianScreen(viewModel: ClockViewModel) {
     val currentLocalTime by viewModel.currentLocalTime.collectAsStateWithLifecycle()
     val isFlashing by viewModel.isFlashing.collectAsStateWithLifecycle()
     val pulseTriggerCount by viewModel.pulseTriggerCount.collectAsStateWithLifecycle()
